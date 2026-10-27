@@ -18,7 +18,7 @@ label{display:block;margin:12px}p{min-height:24px;padding:0 10px}
 <p id="help">Área uniforme: quadro automático aproximado. Ou toque na imagem. Faça uma pinça com polegar e indicador dentro do quadro para pegar; abra para soltar.</p>
 <p id="status">Mostre sua mão inteira para a câmera.</p>
 <div id="preview"><div class="eye"><video autoplay muted playsinline></video><canvas></canvas></div><div class="eye second"><video id="rightVideo" autoplay muted playsinline></video><canvas id="rightCanvas"></canvas></div></div>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"></script>
+<script src="/mediapipe/hands.js"></script>
 <script>
 'use strict';
 const video=document.querySelector('video'),canvas=document.querySelector('canvas');
@@ -127,7 +127,7 @@ async function frame(now,token){
  try{
   pending=hands.send({image:video});await pending;
   schedule(token);
- }catch(error){if(token===epoch){stop();say('Falha no detector. Confira a internet e tente novamente.');}}
+ }catch(error){if(token===epoch){stop();say('Falha no detector. Feche e abra o app para reiniciar o detector.');}}
 }
 button.onclick=async()=>{
  const token=++epoch;button.disabled=true;count.disabled=true;
@@ -135,7 +135,7 @@ button.onclick=async()=>{
   await pending.catch(()=>{});
   if(token!==epoch)return;
   say('Carregando detector…');
-  if(!hands){hands=new Hands({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/'+f});hands.onResults(draw);}
+  if(!hands){hands=new Hands({locateFile:f=>'/mediapipe/'+f});hands.onResults(draw);}
   await hands.setOptions({maxNumHands:Number(count.value),modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.6});
   if(token!==epoch)return;
   const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{exact:'user'},width:{ideal:480,max:640},height:{ideal:360,max:480},frameRate:{ideal:24,max:24}}});
@@ -144,7 +144,7 @@ button.onclick=async()=>{
   if(token!==epoch)return;
   running=true;lastVideoTime=-1;lastInference=-Infinity;button.hidden=true;
   say('Mostre sua mão para a câmera.');schedule(token);
- }catch(error){if(token===epoch){stop();say(error.name==='OverconstrainedError'?'Câmera frontal indisponível neste dispositivo.':'Confira a internet e a permissão da câmera e tente novamente.');}}
+ }catch(error){if(token===epoch){stop();say(error.name==='OverconstrainedError'?'Câmera frontal indisponível neste dispositivo.':'Confira a permissão da câmera e tente novamente.');}}
 };
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stop();say('Câmera pausada. Toque em Ativar câmera para continuar.');}});
 window.addEventListener('pagehide',stop);

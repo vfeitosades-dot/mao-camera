@@ -13,7 +13,16 @@ public class MainActivity extends Activity {
  private void open(){web=new WebView(this);setContentView(web);web.getSettings().setJavaScriptEnabled(true);web.getSettings().setDomStorageEnabled(true);web.getSettings().setMediaPlaybackRequiresUserGesture(false);web.getSettings().setAllowFileAccess(false);web.getSettings().setAllowContentAccess(false);
  web.setWebViewClient(new WebViewClient(){
  public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){return !request.getUrl().toString().equals("https://app.local/index.html");}
- public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){Uri u=request.getUrl();if("app.local".equals(u.getHost())){try{if(!"/index.html".equals(u.getPath()))return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0]));return new WebResourceResponse("text/html","UTF-8",getAssets().open("index.html"));}catch(IOException e){return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0]));}}return null;}});
+ public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
+ Uri u=request.getUrl();String path=u.getPath();
+ if(!"https".equals(u.getScheme())||!"app.local".equals(u.getHost()))return blocked();
+ if(path==null||!(path.equals("/index.html")||path.matches("/mediapipe/[a-zA-Z0-9_.-]+")))return blocked();
+ String mime=path.endsWith(".html")?"text/html":path.endsWith(".js")?"application/javascript":path.endsWith(".wasm")?"application/wasm":"application/octet-stream";
+ try{return new WebResourceResponse(mime,(path.endsWith(".html")||path.endsWith(".js"))?"UTF-8":null,getAssets().open(path.substring(1)));}
+ catch(IOException error){return new WebResourceResponse("text/plain","UTF-8",404,"Not Found",java.util.Collections.emptyMap(),new ByteArrayInputStream(new byte[0]));}
+ }
+ private WebResourceResponse blocked(){return new WebResourceResponse("text/plain","UTF-8",403,"Forbidden",java.util.Collections.emptyMap(),new ByteArrayInputStream(new byte[0]));}
+ });
  web.setWebChromeClient(new WebChromeClient(){public void onPermissionRequest(PermissionRequest r){if("https".equals(r.getOrigin().getScheme())&&"app.local".equals(r.getOrigin().getHost())&&checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED){for(String resource:r.getResources())if(PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)){r.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});return;}}r.deny();}});web.loadUrl("https://app.local/index.html");}
  protected void onPause(){if(web!=null){web.evaluateJavascript("stop()",null);web.onPause();}super.onPause();}
  protected void onResume(){super.onResume();if(web!=null)web.onResume();}
