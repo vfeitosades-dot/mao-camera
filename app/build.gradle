@@ -1,0 +1,4 @@
+plugins { id 'com.android.application' }
+android { namespace 'br.app.mao'; compileSdk 35
+ defaultConfig { applicationId 'br.app.mao'; minSdk 26; targetSdk 35; versionCode 1; versionName '1.0' }
+}
