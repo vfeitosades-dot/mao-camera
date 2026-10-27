@@ -1,8 +1,92 @@
-<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mão</title><style>body{margin:0;background:#10151d;color:white;text-align:center;font:17px system-ui}canvas{width:100%;max-width:720px}button{padding:16px;border:0;border-radius:12px;background:#45edac;font-weight:bold}video{display:none}</style><h2>✋ Esqueleto da mão</h2><button id="start">Ativar câmera</button><p id="status">Mostre sua mão inteira para a câmera.</p><video autoplay muted playsinline></video><canvas></canvas><script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"></script><script>
-const video=document.querySelector('video'),canvas=document.querySelector('canvas'),ctx=canvas.getContext('2d'),status=document.querySelector('#status'),button=document.querySelector('button');
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mão</title>
+<style>
+body{margin:0;background:#10151d;color:white;text-align:center;font:17px system-ui}
+button,select{padding:12px;border:0;border-radius:12px;font:inherit}button{background:#45edac;font-weight:bold}
+#preview{position:relative;width:100%;max-width:720px;margin:auto;background:#000}
+video{display:block;width:100%;height:auto;transform:scaleX(-1)}
+canvas{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}
+label{display:block;margin:12px}p{min-height:24px;padding:0 10px}
+</style>
+<h2>✋ Esqueleto da mão</h2>
+<button id="start">Ativar câmera</button>
+<label>Mãos: <select id="count"><option value="1">1 — mais leve</option><option value="2">2</option></select></label>
+<p id="status">Mostre sua mão inteira para a câmera.</p>
+<div id="preview"><video autoplay muted playsinline></video><canvas></canvas></div>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"></script>
+<script>
+'use strict';
+const video=document.querySelector('video'),canvas=document.querySelector('canvas');
+const ctx=canvas.getContext('2d'),message=document.querySelector('#status');
+const button=document.querySelector('#start'),count=document.querySelector('#count');
 const edges=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[0,17],[17,18],[18,19],[19,20]];
-let running=false,stream,hands;
-function stop(){running=false;if(stream)stream.getTracks().forEach(t=>t.stop());button.hidden=false;button.disabled=false;}
-button.onclick=async()=>{button.disabled=true;try{status.textContent='Carregando detector…';if(!hands){hands=new Hands({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/'+f});hands.setOptions({maxNumHands:2,modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.6});hands.onResults(r=>{canvas.width=video.videoWidth;canvas.height=video.videoHeight;let w=canvas.width,h=canvas.height;ctx.save();ctx.translate(w,0);ctx.scale(-1,1);ctx.drawImage(r.image,0,0,w,h);for(const points of r.multiHandLandmarks||[]){ctx.strokeStyle='#45edac';ctx.lineWidth=4;for(const [a,b]of edges){ctx.beginPath();ctx.moveTo(points[a].x*w,points[a].y*h);ctx.lineTo(points[b].x*w,points[b].y*h);ctx.stroke();}ctx.fillStyle='white';for(const p of points){ctx.beginPath();ctx.arc(p.x*w,p.y*h,5,0,Math.PI*2);ctx.fill();}}ctx.restore();status.textContent=r.multiHandLandmarks?.length?'Mão detectada ✓':'Mostre sua mão para a câmera.';});}stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:640,height:480}});video.srcObject=stream;await video.play();running=true;button.hidden=true;async function frame(){if(!running)return;try{await hands.send({image:video});requestAnimationFrame(frame);}catch(e){stop();status.textContent='Falha no detector. Confira a internet e tente novamente.';}}frame();}catch(e){stop();status.textContent='Confira a internet e a permissão da câmera e tente novamente.';}};
-document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
-</script></html>
+let running=false,stream,hands,epoch=0,callback=0,pending=Promise.resolve();
+let lastVideoTime=-1,lastInference=-Infinity;
+const interval=1000/20;
+function say(text){if(message.textContent!==text)message.textContent=text;}
+function cancelFrame(){
+ if(video.cancelVideoFrameCallback)video.cancelVideoFrameCallback(callback);
+ else cancelAnimationFrame(callback);
+}
+function stop(){
+ ++epoch;running=false;cancelFrame();
+ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+ video.srcObject=null;ctx.clearRect(0,0,canvas.width,canvas.height);
+ button.hidden=false;button.disabled=false;count.disabled=false;
+}
+function draw(result){
+ if(!running||document.hidden)return;
+ const w=video.videoWidth,h=video.videoHeight;
+ if(!w||!h)return;
+ if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+ ctx.clearRect(0,0,w,h);
+ const detected=result.multiHandLandmarks||[];
+ ctx.strokeStyle='#45edac';ctx.lineWidth=3;ctx.lineCap='round';
+ ctx.fillStyle='#fff';
+ for(const points of detected){
+  ctx.beginPath();
+  for(const [a,b]of edges){ctx.moveTo(points[a].x*w,points[a].y*h);ctx.lineTo(points[b].x*w,points[b].y*h);}
+  ctx.stroke();ctx.beginPath();
+  for(const p of points){ctx.moveTo(p.x*w+4,p.y*h);ctx.arc(p.x*w,p.y*h,4,0,Math.PI*2);}
+  ctx.fill();
+ }
+ say(detected.length?'Mão detectada ✓':'Mostre sua mão para a câmera.');
+}
+function schedule(token){
+ if(!running||token!==epoch)return;
+ const next=now=>frame(now,token);
+ callback=video.requestVideoFrameCallback?video.requestVideoFrameCallback(next):requestAnimationFrame(next);
+}
+async function frame(now,token){
+ if(!running||token!==epoch)return;
+ if(video.readyState<2||video.currentTime===lastVideoTime||now-lastInference<interval){schedule(token);return;}
+ lastVideoTime=video.currentTime;lastInference=now;
+ try{
+  pending=hands.send({image:video});await pending;
+  schedule(token);
+ }catch(error){if(token===epoch){stop();say('Falha no detector. Confira a internet e tente novamente.');}}
+}
+button.onclick=async()=>{
+ const token=++epoch;button.disabled=true;count.disabled=true;
+ try{
+  await pending.catch(()=>{});
+  if(token!==epoch)return;
+  say('Carregando detector…');
+  if(!hands){hands=new Hands({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/'+f});hands.onResults(draw);}
+  await hands.setOptions({maxNumHands:Number(count.value),modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.6});
+  if(token!==epoch)return;
+  const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:480,max:640},height:{ideal:360,max:480},frameRate:{ideal:24,max:24}}});
+  if(token!==epoch||document.hidden){acquired.getTracks().forEach(t=>t.stop());return;}
+  stream=acquired;video.srcObject=stream;await video.play();
+  if(token!==epoch)return;
+  running=true;lastVideoTime=-1;lastInference=-Infinity;button.hidden=true;
+  say('Mostre sua mão para a câmera.');schedule(token);
+ }catch(error){if(token===epoch){stop();say('Confira a internet e a permissão da câmera e tente novamente.');}}
+};
+document.addEventListener('visibilitychange',()=>{if(document.hidden){stop();say('Câmera pausada. Toque em Ativar câmera para continuar.');}});
+window.addEventListener('pagehide',stop);
+</script>
+</html>
