@@ -6,16 +6,18 @@
 <style>
 body{margin:0;background:#10151d;color:white;text-align:center;font:17px system-ui}
 button,select{padding:12px;border:0;border-radius:12px;font:inherit}button{background:#45edac;font-weight:bold}
-#preview{position:relative;width:100%;max-width:720px;margin:auto;background:#000}
+#preview{display:flex;width:100%;max-width:720px;margin:auto;background:#000}.eye{position:relative;width:100%;min-width:0}.eye.second{display:none}body.vr #preview{max-width:none;height:100dvh;align-items:center}body.vr .eye{width:50%}body.vr .eye.second{display:block}body.vr h2,body.vr label,body.vr #start,body.vr #status,body.vr #reset,body.vr #help{display:none}body.vr #vr{position:fixed;right:8px;top:8px;z-index:5;opacity:.7;font-size:12px}
 video{display:block;width:100%;height:auto;transform:scaleX(-1)}
-canvas{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}
+canvas{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);touch-action:none}
 label{display:block;margin:12px}p{min-height:24px;padding:0 10px}
 </style>
 <h2>✋ Esqueleto da mão</h2>
 <button id="start">Ativar câmera</button>
 <label>Mãos: <select id="count"><option value="1">1 — mais leve</option><option value="2">2</option></select></label>
+<button id="reset">Novo quadro</button> <button id="vr">Modo VR</button>
+<p id="help">Área uniforme: quadro automático aproximado. Ou toque na imagem. Faça uma pinça com polegar e indicador dentro do quadro para pegar; abra para soltar.</p>
 <p id="status">Mostre sua mão inteira para a câmera.</p>
-<div id="preview"><video autoplay muted playsinline></video><canvas></canvas></div>
+<div id="preview"><div class="eye"><video autoplay muted playsinline></video><canvas></canvas></div><div class="eye second"><video id="rightVideo" autoplay muted playsinline></video><canvas id="rightCanvas"></canvas></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"></script>
 <script>
 'use strict';
@@ -26,6 +28,59 @@ const edges=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11
 let running=false,stream,hands,epoch=0,callback=0,pending=Promise.resolve();
 let lastVideoTime=-1,lastInference=-Infinity;
 const interval=1000/20;
+const rightVideo=document.querySelector('#rightVideo'),rightCanvas=document.querySelector('#rightCanvas');
+const rightCtx=rightCanvas.getContext('2d');
+let vr=false,quad=null,grabbed=false,pinched=false,missed=0,offset={x:0,y:0};
+let lastSurface=-Infinity,candidate=null,stable=0;
+const probe=document.createElement('canvas');probe.width=96;probe.height=72;
+const probeCtx=probe.getContext('2d',{willReadFrequently:true});
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function place(x,y){quad={x:clamp(x,.18,.82),y:clamp(y,.14,.86)};grabbed=false;pinched=false;}
+function resetQuad(){quad=null;grabbed=false;pinched=false;candidate=null;stable=0;lastSurface=-Infinity;}
+function gesture(points){
+ if(!points){if(++missed>=3){grabbed=false;pinched=false;}return;}
+ missed=0;
+ const distance=(a,b)=>Math.hypot((a.x-b.x)*video.videoWidth,(a.y-b.y)*video.videoHeight);
+ const palm=distance(points[0],points[9]);if(palm<10){grabbed=false;pinched=false;return;}
+ const ratio=distance(points[4],points[8])/palm;
+ const was=pinched;if(!pinched&&ratio<.32)pinched=true;else if(pinched&&ratio>.5)pinched=false;
+ const x=(points[4].x+points[8].x)/2,y=(points[4].y+points[8].y)/2;
+ if(!pinched){grabbed=false;return;}
+ if(quad&&!was&&Math.abs(x-quad.x)<=.18&&Math.abs(y-quad.y)<=.14){grabbed=true;offset={x:quad.x-x,y:quad.y-y};}
+ if(grabbed&&quad){quad.x=clamp(x+offset.x,.18,.82);quad.y=clamp(y+offset.y,.14,.86);}
+}
+function findSurface(detected){
+ const now=performance.now();if(quad||now-lastSurface<500)return;lastSurface=now;
+ probeCtx.drawImage(video,0,0,96,72);
+ const data=probeCtx.getImageData(0,0,96,72).data;
+ let best=null;
+ for(const cy of [32,44,56])for(const cx of [24,48,72]){
+  if(detected.some(hand=>hand.some(p=>Math.abs(p.x-cx/96)<.25&&Math.abs(p.y-cy/72)<.25)))continue;
+  let sum=0,square=0,n=0;
+  for(let y=cy-10;y<cy+10;y+=2)for(let x=cx-14;x<cx+14;x+=2){const i=(y*96+x)*4;const v=.299*data[i]+.587*data[i+1]+.114*data[i+2];sum+=v;square+=v*v;n++;}
+  const mean=sum/n,variance=square/n-mean*mean;
+  if(mean>30&&mean<225&&variance<180&&(!best||variance<best.score))best={x:cx/96,y:cy/72,score:variance};
+ }
+ if(!best){candidate=null;stable=0;return;}
+ if(candidate&&Math.hypot(best.x-candidate.x,best.y-candidate.y)<.1)stable++;else stable=1;
+ candidate=best;if(stable>=3)place(best.x,best.y);
+}
+function paintQuad(c,w,h){
+ if(!quad)return;
+ const x=(quad.x-.18)*w,y=(quad.y-.14)*h;
+ c.fillStyle=grabbed?'rgba(69,237,172,.25)':'rgba(80,160,255,.18)';c.strokeStyle=grabbed?'#45edac':'#75baff';c.lineWidth=4;
+ c.fillRect(x,y,.36*w,.28*h);c.strokeRect(x,y,.36*w,.28*h);
+}
+for(const layer of [canvas,rightCanvas])layer.addEventListener('pointerdown',event=>{
+ if(!running)return;const r=layer.getBoundingClientRect();place(1-(event.clientX-r.left)/r.width,(event.clientY-r.top)/r.height);
+});
+document.querySelector('#reset').onclick=resetQuad;
+document.querySelector('#vr').onclick=async()=>{
+ vr=!vr;document.body.classList.toggle('vr',vr);document.querySelector('#vr').textContent=vr?'Sair VR':'Modo VR';
+ if(vr){rightVideo.srcObject=stream;rightVideo.play().catch(()=>{});try{await document.documentElement.requestFullscreen();}catch(e){}try{await screen.orientation.lock('landscape');}catch(e){}}
+ else{rightVideo.pause();try{screen.orientation.unlock();}catch(e){}if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});}
+};
+
 function say(text){if(message.textContent!==text)message.textContent=text;}
 function cancelFrame(){
  if(video.cancelVideoFrameCallback)video.cancelVideoFrameCallback(callback);
@@ -34,6 +89,8 @@ function cancelFrame(){
 function stop(){
  ++epoch;running=false;cancelFrame();
  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+ rightVideo.pause();rightVideo.srcObject=null;grabbed=false;pinched=false;
+ rightCtx.clearRect(0,0,rightCanvas.width,rightCanvas.height);
  video.srcObject=null;ctx.clearRect(0,0,canvas.width,canvas.height);
  button.hidden=false;button.disabled=false;count.disabled=false;
 }
@@ -44,6 +101,7 @@ function draw(result){
  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
  ctx.clearRect(0,0,w,h);
  const detected=result.multiHandLandmarks||[];
+ gesture(detected[0]);findSurface(detected);
  ctx.strokeStyle='#45edac';ctx.lineWidth=3;ctx.lineCap='round';
  ctx.fillStyle='#fff';
  for(const points of detected){
@@ -53,7 +111,9 @@ function draw(result){
   for(const p of points){ctx.moveTo(p.x*w+4,p.y*h);ctx.arc(p.x*w,p.y*h,4,0,Math.PI*2);}
   ctx.fill();
  }
- say(detected.length?'Mão detectada ✓':'Mostre sua mão para a câmera.');
+ paintQuad(ctx,w,h);
+ if(vr){if(rightCanvas.width!==w||rightCanvas.height!==h){rightCanvas.width=w;rightCanvas.height=h;}rightCtx.clearRect(0,0,w,h);rightCtx.drawImage(canvas,0,0);}
+ say(grabbed?'Quadro segurado — abra a pinça para soltar.':quad?'Faça uma pinça dentro do quadro para pegar.':'Mostre uma área uniforme ou toque para criar o quadro.');
 }
 function schedule(token){
  if(!running||token!==epoch)return;
@@ -78,13 +138,13 @@ button.onclick=async()=>{
   if(!hands){hands=new Hands({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/'+f});hands.onResults(draw);}
   await hands.setOptions({maxNumHands:Number(count.value),modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.6});
   if(token!==epoch)return;
-  const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:480,max:640},height:{ideal:360,max:480},frameRate:{ideal:24,max:24}}});
+  const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{exact:'user'},width:{ideal:480,max:640},height:{ideal:360,max:480},frameRate:{ideal:24,max:24}}});
   if(token!==epoch||document.hidden){acquired.getTracks().forEach(t=>t.stop());return;}
-  stream=acquired;video.srcObject=stream;await video.play();
+  stream=acquired;video.srcObject=stream;await video.play();if(vr){rightVideo.srcObject=stream;await rightVideo.play();}
   if(token!==epoch)return;
   running=true;lastVideoTime=-1;lastInference=-Infinity;button.hidden=true;
   say('Mostre sua mão para a câmera.');schedule(token);
- }catch(error){if(token===epoch){stop();say('Confira a internet e a permissão da câmera e tente novamente.');}}
+ }catch(error){if(token===epoch){stop();say(error.name==='OverconstrainedError'?'Câmera frontal indisponível neste dispositivo.':'Confira a internet e a permissão da câmera e tente novamente.');}}
 };
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stop();say('Câmera pausada. Toque em Ativar câmera para continuar.');}});
 window.addEventListener('pagehide',stop);
