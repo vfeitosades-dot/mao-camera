@@ -33,12 +33,13 @@ jobs:
           test -s app/src/main/assets/mediapipe/hand_landmark_lite.tflite
           test -s app/src/main/assets/mediapipe/hands_solution_simd_wasm_bin.wasm
           test -s app/src/main/assets/mediapipe/hands_solution_wasm_bin.wasm
-      - name: Incluir modelo facial offline
+      - name: Incluir renderizador 3D offline
         run: |
-          mkdir -p app/src/main/assets/facemesh
-          curl --fail --location --retry 3 https://registry.npmjs.org/@mediapipe/face_mesh/-/face_mesh-0.4.1633559619.tgz -o "$RUNNER_TEMP/face.tgz"
-          tar -xzf "$RUNNER_TEMP/face.tgz" --strip-components=1 -C app/src/main/assets/facemesh
-          test -s app/src/main/assets/facemesh/face_mesh.js
+          mkdir -p app/src/main/assets/vendor
+          curl --fail --location --retry 3 https://registry.npmjs.org/three/-/three-0.160.0.tgz -o "$RUNNER_TEMP/three.tgz"
+          tar -xzf "$RUNNER_TEMP/three.tgz" -O package/build/three.min.js > app/src/main/assets/vendor/three.min.js
+          tar -xzf "$RUNNER_TEMP/three.tgz" -O package/LICENSE > app/src/main/assets/vendor/THREE-LICENSE.txt
+          test -s app/src/main/assets/vendor/three.min.js
       - name: Testar detector sem rede externa
         run: |
           npm install --prefix "$RUNNER_TEMP/offline-check" --no-audit --no-fund playwright@1.56.1
@@ -46,7 +47,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: visual-preview
-          path: ui-preview.png
+          path: |
+            ui-preview.png
+            stereo-preview.png
+            mobile-preview.png
+            test-results.json
       - name: Compilar APK
         run: gradle --no-daemon assembleDebug
       - name: Preparar download
@@ -60,4 +65,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="mao-camera-${GITHUB_RUN_NUMBER}"
-          gh release create "$tag" mao-camera.apk --target "$GITHUB_SHA" --title "Mão câmera ${GITHUB_RUN_NUMBER}" --notes "APK Android 8+. Permita a câmera e mostre sua mão. Detector incluído no APK: funciona sem internet, inclusive no primeiro uso. Versão de teste assinada automaticamente; ainda não validada em celular físico."
+          gh release create "$tag" mao-camera.apk --target "$GITHUB_SHA" --title "Mão câmera ${GITHUB_RUN_NUMBER}" --notes "APK Android 8+. Permita a câmera e mostre sua mão. Mundo 3D estereoscópico e mãos offline. AVME experimental, sem garantia de 6DoF. Consulte docs/STATUS.md para módulos pendentes. Versão de teste assinada automaticamente; ainda não validada em celular físico."

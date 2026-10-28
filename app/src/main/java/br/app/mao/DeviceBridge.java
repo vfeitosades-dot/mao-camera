@@ -1,0 +1,27 @@
+package br.app.mao;
+import android.app.Activity;
+import android.content.*;
+import android.hardware.*;
+import android.hardware.camera2.*;
+import android.os.*;
+import android.view.Surface;
+import android.webkit.JavascriptInterface;
+import org.json.*;
+public final class DeviceBridge implements SensorEventListener {
+ private final Activity activity;private final SensorManager manager;private Sensor rotation;private String method="UNAVAILABLE";private float[] matrix=null,gravity=null,magnetic=null;private long updated=0;private int accuracy=0;
+ public DeviceBridge(Activity a){activity=a;manager=(SensorManager)a.getSystemService(Context.SENSOR_SERVICE);}
+ public void resume(){rotation=manager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);method="ROTATION_VECTOR";if(rotation==null){rotation=manager.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR);method="GEOMAGNETIC";}if(rotation!=null)manager.registerListener(this,rotation,SensorManager.SENSOR_DELAY_GAME);else{method="ACCEL_MAG";Sensor acc=manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),mag=manager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);if(acc!=null&&mag!=null){manager.registerListener(this,acc,SensorManager.SENSOR_DELAY_GAME);manager.registerListener(this,mag,SensorManager.SENSOR_DELAY_GAME);}else method="UNAVAILABLE";}}
+ public synchronized void pause(){manager.unregisterListener(this);updated=0;matrix=null;}
+ public synchronized void onSensorChanged(SensorEvent e){float[] result=new float[9];boolean valid=false;
+ if(e.sensor.getType()==Sensor.TYPE_ROTATION_VECTOR||e.sensor.getType()==Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR){SensorManager.getRotationMatrixFromVector(result,e.values);valid=true;}
+ else{if(e.sensor.getType()==Sensor.TYPE_ACCELEROMETER)gravity=e.values.clone();if(e.sensor.getType()==Sensor.TYPE_MAGNETIC_FIELD)magnetic=e.values.clone();if(gravity!=null&&magnetic!=null)valid=SensorManager.getRotationMatrix(result,null,gravity,magnetic);}
+ if(valid){int r=activity.getWindowManager().getDefaultDisplay().getRotation();int x=SensorManager.AXIS_X,y=SensorManager.AXIS_Y;if(r==Surface.ROTATION_90){x=SensorManager.AXIS_Y;y=SensorManager.AXIS_MINUS_X;}else if(r==Surface.ROTATION_180){x=SensorManager.AXIS_MINUS_X;y=SensorManager.AXIS_MINUS_Y;}else if(r==Surface.ROTATION_270){x=SensorManager.AXIS_MINUS_Y;y=SensorManager.AXIS_X;}float[] remap=new float[9];SensorManager.remapCoordinateSystem(result,x,y,remap);matrix=remap;updated=SystemClock.elapsedRealtime();accuracy=e.accuracy;}}
+ public synchronized void onAccuracyChanged(Sensor s,int value){accuracy=value;}
+ @JavascriptInterface public synchronized String pose(){JSONObject out=new JSONObject();try{out.put("method",method);out.put("ageMs",updated==0?999999:SystemClock.elapsedRealtime()-updated);out.put("accuracy",accuracy);JSONArray data=new JSONArray();if(matrix!=null)for(float n:matrix)data.put(n);out.put("matrix",data);}catch(Exception ignored){}return out.toString();}
+ @JavascriptInterface public String diagnostics(){JSONObject out=new JSONObject();try{
+ JSONArray sensors=new JSONArray();for(Sensor s:manager.getSensorList(Sensor.TYPE_ALL)){JSONObject item=new JSONObject();item.put("name",s.getName());item.put("type",s.getType());sensors.put(item);}out.put("sensors",sensors);out.put("orientationMethod",method);
+ CameraManager cameras=(CameraManager)activity.getSystemService(Context.CAMERA_SERVICE);JSONArray list=new JSONArray();for(String id:cameras.getCameraIdList()){CameraCharacteristics c=cameras.getCameraCharacteristics(id);JSONObject item=new JSONObject();item.put("id",id);item.put("facing",c.get(CameraCharacteristics.LENS_FACING));JSONArray fps=new JSONArray();android.util.Range<Integer>[] ranges=c.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES);if(ranges!=null)for(android.util.Range<Integer> range:ranges)fps.put(range.toString());item.put("fpsRanges",fps);list.put(item);}out.put("cameras",list);out.put("concurrentCameraGroups",Build.VERSION.SDK_INT>=30?cameras.getConcurrentCameraIds().size():JSONObject.NULL);
+ Intent battery=activity.registerReceiver(null,new IntentFilter(Intent.ACTION_BATTERY_CHANGED));if(battery!=null){int level=battery.getIntExtra(BatteryManager.EXTRA_LEVEL,-1),scale=battery.getIntExtra(BatteryManager.EXTRA_SCALE,-1);out.put("batteryPercent",level>=0&&scale>0?100.0*level/scale:JSONObject.NULL);out.put("batteryTemperatureC",battery.getIntExtra(BatteryManager.EXTRA_TEMPERATURE,0)/10.0);}
+ out.put("thermalStatus",Build.VERSION.SDK_INT>=29?((PowerManager)activity.getSystemService(Context.POWER_SERVICE)).getCurrentThermalStatus():JSONObject.NULL);out.put("memoryClassMb",((android.app.ActivityManager)activity.getSystemService(Context.ACTIVITY_SERVICE)).getMemoryClass());out.put("androidApi",Build.VERSION.SDK_INT);
+ }catch(Exception e){try{out.put("error",e.getClass().getSimpleName());}catch(Exception ignored){}}return out.toString();}
+}

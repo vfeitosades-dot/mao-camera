@@ -1,15 +1,29 @@
-# Orbit 2.0 — interface espacial, navegador interno e olhar experimental
+# HORIZON POCKET VR — reconstrução 3.0
 
-[Baixar APK](https://github.com/vfeitosades-dot/mao-camera/releases/latest)
+[Baixar APK publicado](https://github.com/vfeitosades-dot/mao-camera/releases/latest)
 
-Interface redesenhada com vidro escuro, janelas arredondadas, cartões e barra flutuante. Referências visuais consultadas: https://www.uploadvr.com/quest-3-v85-ptc-can-turn-any-surface-into-a-virtual-keyboard/ e https://www.techmeme.com/240625/p20 . Design próprio inspirado em interfaces VR; não é Meta Quest.
+Base reconstruída do zero, preservando o detector de mãos otimizado da versão anterior. Mundo WebGL 3D, duas câmeras estereoscópicas com IPD/FOV/distorção manual, ambientes originais, raycast/pinça, orientação por sensores disponíveis, AVME experimental por imagem e controles alternativos sem giroscópio. Biblioteca com pintura, blocos/física simples, mídias locais, comandos locais, configurações e navegador Android 2D com teclado.
 
-Câmera traseira para mãos e desenho. Abra Navegador para usar sites dentro do app; botão ⌨ abre teclado flutuante com letras, números, símbolos, Shift, apagar e espaço. Digita no endereço ou no campo da página selecionado. Internet é necessária para sites; o navegador não recebe ponte JavaScript nativa e nega permissões de câmera das páginas. Algumas páginas podem exigir teclado do sistema, recursos ou autenticação não suportados pelo WebView.
+**Entrega por etapas.** Não é uma implementação completa de Meta Quest/Horizon OS. Consulte [estado dos módulos](docs/STATUS.md), [arquitetura](docs/ARCHITECTURE.md) e [testes](docs/TESTS.md). Unity, CameraX, SLAM, fusão avançada, marcadores, navegador em textura VR, cerâmica e vídeos imersivos não estão implementados.
 
-Modo Olhar alterna para câmera frontal. Toque Ativar se necessário, depois Calibrar olhar: olhe para cada ponto mantendo a cabeça imóvel enquanto coleta. Faça cinco capturas. Estimativa por posição da íris, calibração pessoal e suavização; rejeita olhos fechados, ausência de rosto e deslocamentos da cabeça. O cursor apenas indica direção e não clica automaticamente. Não é eye tracking de precisão e não foi validado em usuários. Não funciona se a câmera não puder ver os olhos (por exemplo, celular em visor que cobre o rosto). Câmera traseira e frontal não são usadas simultaneamente.
+## Usar
+- Inicie sem câmera. Arraste fora dos painéis para olhar; toque nos cartões para abrir apps. Biblioteca e dock são objetos da cena 3D.
+- Ativar mãos usa a câmera traseira desobstruída. Mesmo MediaPipe lite, .6 de confiança, 24 FPS de captura máxima e inferência até 20Hz. Uma mão como padrão; opção de duas. Faça pinça para selecionar e segure a barra para mover janela. Não fornece posição métrica.
+- Ajustes permite sensor/visual/manual, quatro ambientes, qualidade, IPD, FOV e distorção. Automático consulta sensores reais no Android; sem medições confiáveis, a última orientação é mantida. Recentrar está sempre disponível.
+- Entrar VR renderiza os olhos separadamente. A distorção não está calibrada para um modelo específico de lentes. Use sentado ou parado; passthrough monocular não detecta obstáculos com segurança.
+- Pintura e blocos possuem salvar/carregar locais. Foto/vídeo é escolhido com Storage Access Framework. Navegador abre dentro do app, mas numa janela Android 2D, não num navegador VR espacial.
+- Sair de VR: botão no topo ou Escape. Pausa desliga câmera. Enter/espaço seleciona o cursor central, R recentra; setas e gamepad permitem olhar.
 
-O modelo MediaPipe FaceMesh detecta face e íris; a estimativa de olhar é uma camada experimental deste app. Detectar íris por si só não determina o alvo do olhar: https://research.google/blog/mediapipe-iris-real-time-iris-tracking-depth-estimation/ . Não foi treinado um novo modelo de gaze nem medida acurácia. A calibração vale só enquanto posição e iluminação forem mantidas. Dados não são enviados pelo detector.
+## Offline e privacidade
+Modelos, Three.js e recursos são incluídos na compilação do APK. O mundo, mãos e aplicativos locais não dependem de internet; sites dependem. Não há captura de microfone nem envio de imagens pelos detectores. Os arquivos escolhidos ficam no aparelho. Nada é enviado automaticamente a uma IA externa.
 
-Modelos de mãos e rosto incluídos no APK, offline desde o primeiro uso. VR continua monoscópico; navegador é uma janela Android única, não duas páginas estereoscópicas. Desenho usa profundidade aproximada pelo tamanho da mão, sem ancoragem no mundo.
+## Compilar
+JDK 17, Gradle 8.9, Android SDK 35. `gradle assembleDebug`. O workflow baixa pacotes fixos Three.js 0.160.0 e MediaPipe Hands 0.4.1675469240 para `assets/`, executa os testes e publica o APK debug. Preserve as licenças incluídas nos pacotes. Para build manual, execute os passos de assets do workflow antes de compilar. Chave de debug pode exigir desinstalar uma versão anterior.
 
-Android 8+ com WebView atualizado. CI verifica modelos em Chrome com rede externa bloqueada, cálculos de calibração, interação, desenho e compilação Android. Não substitui testes no aparelho. Chave debug pode exigir desinstalar a versão anterior.
+## Referências técnicas
+- [Android: sensores de posição](https://developer.android.com/develop/sensors-and-location/sensors/sensors_position)
+- [Three.js StereoCamera](https://threejs.org/docs/pages/StereoCamera.html)
+- [Cardboard head tracker](https://developers.google.com/cardboard/reference/c/group/head-tracker): não usado por exigir sensores que podem faltar.
+- [Meta: componentes de UI](https://developers.meta.com/vr/design/components/): referência, não recursos oficiais incorporados.
+
+Os resultados de CI estão nos artifacts da execução. Nenhum teste em celular/VR Box físico foi executado neste ambiente.

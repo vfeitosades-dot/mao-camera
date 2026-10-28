@@ -1,79 +1,25 @@
-const http = require('node:http');
-const fs = require('node:fs');
-const path = require('node:path');
-const assert = require('node:assert/strict');
-const { chromium } = require('playwright');
-(async () => {
- const root = path.resolve('app/src/main/assets');
- const external = [];
- const server = http.createServer((req, res) => {
-  const name = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
-  const file = path.resolve(root, '.' + (name === '/' ? '/index.html' : name));
-  if (!file.startsWith(root + path.sep)) { res.writeHead(403).end(); return; }
-  const mime = file.endsWith('.wasm') ? 'application/wasm' : file.endsWith('.js') ? 'application/javascript' : file.endsWith('.html') ? 'text/html' : 'application/octet-stream';
-  fs.readFile(file, (error, data) => { if(error)res.writeHead(404).end();else res.writeHead(200, {'Content-Type':mime}).end(data); });
- });
- await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
- let browser;
- try {
-  browser = await chromium.launch({channel:'chrome',headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
-  const page = await browser.newPage();
-  const origin = 'http://127.0.0.1:' + server.address().port;
-  await page.route('**/*',route => {
-   const url = route.request().url();
-   if(url.startsWith(origin + '/') || url.startsWith('blob:') || url.startsWith('data:'))return route.continue();
-   external.push(url); return route.abort();
-  });
-  await page.goto(origin + '/index.html');
-  const panelChecks=await page.evaluate(()=>{
-   Object.defineProperty(video,'videoWidth',{value:640,configurable:true});Object.defineProperty(video,'videoHeight',{value:480,configurable:true});
-   resetQuad();const bounds=panelBounds();
-   if(hitButton(bounds.x+bounds.w*.18,bounds.y+bounds.h*.6)!==0)throw Error('Botão site inválido');
-   if(hitButton(bounds.x+bounds.w*.48,bounds.y+bounds.h*.6)!==1)throw Error('Botão desenho inválido');
-   action(1);if(mode!=='desenho')throw Error('Modo desenho não abriu');
-   const hand=Array.from({length:21},()=>({x:.5,y:.55}));
-   hand[0]={x:.5,y:.85};hand[9]={x:.5,y:.45};hand[4]={x:.89,y:.9};hand[8]={x:.91,y:.9};
-   gesture(hand);hand[4].x=.91;hand[8].x=.93;gesture(hand);
-   if(strokes.length!==1||strokes[0].length<2)throw Error('Traço não registrado');
-   hand[4].x=.1;gesture(hand);if(activeStroke!==null)throw Error('Traço não terminou');
-   const p=project({x:.2,y:.2,z:.3},640,480);if(!Number.isFinite(p.x))throw Error('Projeção inválida');
-   action(2);if(strokes.length)throw Error('Limpar falhou');
-   paintScene(ctx,640,480);advise();
-   resetQuad();delete video.videoWidth;delete video.videoHeight;return true;
-  });assert.equal(panelChecks,true);
-  const gazeCheck=await page.evaluate(()=>{
-   const m={cx:.5,cy:0,left:.3,right:.7,up:-.1,down:.1,headX:.5,headY:.5};
-   const p=calibratedGaze({x:.3,y:0,headX:.5,headY:.5},m);
-   if(Math.abs(p.x-.12)>.01)throw Error('Calibração horizontal falhou');
-   if(calibratedGaze({x:.5,y:0,headX:.9,headY:.5},m)!==null)throw Error('Movimento de cabeça deve invalidar cursor');
-   if(eyeFeature([])!==null)throw Error('Sem íris não pode haver estimativa');
-   return true;
-  });assert.equal(gazeCheck,true);
-  const faceResult=await page.evaluate(async()=>{
-   const model=new FaceMesh({locateFile:f=>'/facemesh/'+f});await model.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:.6,minTrackingConfidence:.6});
-   let received=false;model.onResults(()=>{received=true});
-   const image=document.createElement('canvas');image.width=480;image.height=360;
-   image.getContext('2d').fillRect(0,0,480,360);await model.send({image});await model.close();return received;
-  });assert.equal(faceResult,true,'Modelo facial deve processar offline.');
-  await page.screenshot({path:'ui-preview.png',fullPage:true});
-  const result = await page.evaluate(async () => {
-   const detector = new Hands({locateFile:f=>'/mediapipe/'+f});
-   detector.setOptions({maxNumHands:1,modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.6});
-   let received=false;
-   detector.onResults(()=>{received=true});
-   const image=document.createElement('canvas');image.width=480;image.height=360;
-   image.getContext('2d').fillRect(0,0,480,360);
-   await detector.send({image});
-   await detector.close();
-   return received;
-  });
-  assert.equal(result,true,'O detector deve processar uma imagem sem rede externa.');
-  assert.deepEqual(external,[],'Nenhum recurso externo pode ser solicitado.');
-  const manifest=fs.readFileSync('app/src/main/AndroidManifest.xml','utf8');
-  assert(manifest.includes('android.permission.INTERNET'),'Internet é necessária somente para o navegador.');
-  console.log('PASSOU: detector inicializado e imagem processada sem rede externa; modelos locais; rede externa bloqueada durante o teste.');
- } finally {
-  if(browser)await browser.close();
-  await new Promise(resolve=>server.close(resolve));
- }
+const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const {chromium}=require('playwright');
+(async()=>{
+ const root=path.resolve('app/src/main/assets'),external=[],errors=[],results=[];
+ const server=http.createServer((req,res)=>{const name=decodeURIComponent(new URL(req.url,'http://localhost').pathname),file=path.resolve(root,'.'+(name==='/'?'/index.html':name));if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}const mime=file.endsWith('.wasm')?'application/wasm':file.endsWith('.js')?'application/javascript':file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':'application/octet-stream';fs.readFile(file,(error,data)=>error?res.writeHead(404).end():res.writeHead(200,{'Content-Type':mime}).end(data));});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));let browser;
+ try{
+  browser=await chromium.launch({channel:'chrome',headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});const page=await browser.newPage({viewport:{width:1440,height:900}});page.on('pageerror',e=>errors.push(e.message));
+  const origin='http://127.0.0.1:'+server.address().port;await page.route('**/*',route=>{const url=route.request().url();if(url.startsWith(origin+'/')||url.startsWith('blob:')||url.startsWith('data:'))return route.continue();external.push(url);return route.abort();});
+  await page.goto(origin);await page.waitForFunction(()=>window.PocketTest&&PocketTest.state.frame>2);
+  const geometry=await page.evaluate(()=>{const a=PocketTest;a.setVR(true);a.render();const l=a.stereo.cameraL.matrixWorld.elements,r=a.stereo.cameraR.matrixWorld.elements;return{eyes:r[12]-l[12],children:a.scene.children.length,frame:a.state.frame,leftProjection:a.stereo.cameraL.projectionMatrix.elements,rightProjection:a.stereo.cameraR.projectionMatrix.elements};});
+  assert(Math.abs(geometry.eyes-.064)<.001,'Olhos devem estar separados por IPD');assert.notDeepEqual(geometry.leftProjection,geometry.rightProjection,'Projeções devem ser distintas');assert(geometry.children>5);results.push('Cena WebGL e estéreo com duas projeções distintas: passou');
+  await page.screenshot({path:'stereo-preview.png'});await page.evaluate(()=>PocketTest.setVR(false));
+  const flow=await page.evaluate(()=>{const w=96,h=72,old=new Uint8Array(w*h),next=new Uint8Array(w*h);let seed=7;for(let i=0;i<old.length;i++){seed=(seed*16807)%2147483647;old[i]=40+seed%160;}for(let y=0;y<h;y++)for(let x=0;x<w;x++)next[y*w+x]=x>=2&&y+1<h?old[(y+1)*w+x-2]:80;const tracker=new PocketMotion.VisualTracker();tracker.process(old,w,h,[],1000);const valid={...tracker.process(next,w,h,[],1100)};const lost={...tracker.process(new Uint8Array(w*h),w,h,[],1200)};return{valid,lost};});
+  assert.equal(flow.valid.status,'LIMITED');assert.equal(flow.valid.dx,2);assert.equal(flow.valid.dy,-1);assert.equal(flow.lost.status,'LOST');assert.equal(flow.lost.dx,0);results.push('AVME: translação de imagem sintética, consenso e rejeição de imagem escura: passou; não valida pose física');
+  await page.locator('#menu').click();await page.locator('#settings').click();await page.locator('#ipd').fill('70');await page.locator('#ipd').dispatchEvent('input');await page.locator('#environment').selectOption('space');await page.reload();await page.waitForFunction(()=>window.PocketTest);assert.equal(await page.evaluate(()=>PocketTest.config.ipd),70);assert.equal(await page.evaluate(()=>PocketTest.config.environment),'space');results.push('Configurações persistentes e troca de ambiente: passou');
+  await page.evaluate(()=>PocketTest.openApp('paint'));await page.locator('#closeApp').click();await page.mouse.move(1150,650);await page.mouse.down();await page.mouse.move(1270,690,{steps:8});await page.mouse.up();assert(await page.evaluate(()=>PocketTest.scene.children.some(g=>g.children&&g.children.some(m=>m.userData.points?.length>1))));results.push('Pintura com controle alternativo: passou');
+  await page.evaluate(()=>PocketTest.openApp('blocks'));await page.locator('#addBox').click();await page.locator('#addBall').click();await page.locator('#saveBlocks').click();assert(JSON.parse(await page.evaluate(()=>localStorage.getItem('hp-blocks'))).length===2);results.push('Blocos e persistência de projeto: passou');
+  await page.evaluate(()=>PocketTest.openApp('browser'));assert(await page.locator('#visit').isVisible());results.push('Formulário do navegador: passou; WebView Android e navegação real pendem de aparelho');
+  const detector=await page.evaluate(async()=>{const model=new Hands({locateFile:f=>'/mediapipe/'+f});await model.setOptions({maxNumHands:1,modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.6});let received=false;model.onResults(()=>{received=true});const image=document.createElement('canvas');image.width=480;image.height=360;image.getContext('2d').fillRect(0,0,480,360);await model.send({image});await model.close();return received;});assert(detector);assert.deepEqual(external,[]);results.push('Modelo de mãos processou imagem sintética sem recursos externos: passou; mãos reais pendem de aparelho');
+  await page.evaluate(()=>{document.getElementById('toolbox').hidden=true;PocketTest.openApp('environments');});await page.locator('[data-env="home"]').click();await page.locator('#closeApp').click();await page.screenshot({path:'ui-preview.png',fullPage:true});
+  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'mobile-preview.png'});
+  assert.deepEqual(errors,[],'Erros JavaScript não esperados');fs.writeFileSync('test-results.json',JSON.stringify({results,pending:['Inicialização no Android físico','Sensores reais e calibração de eixos','AVME com movimento físico e deriva','Mãos reais e latência','Lentes no VR Box','WebView Android e teclado','Vídeo e arquivos SAF no Android','Desempenho térmico em aparelho'],noExternalRequests:external.length===0},null,2));console.log(results.join('\n'));
+ }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1});
