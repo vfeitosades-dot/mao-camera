@@ -10,9 +10,9 @@
 <label>Campo de visão<input id="fov" type="range" min="45" max="100" value="75"></label>
 <label>Distorção radial manual<input id="distortion" type="range" min="-30" max="40" value="0"></label>
 <label>Distância dos painéis<input id="distance" type="range" min="100" max="280" value="170"></label>
-<label>Seleção por permanência<input id="dwell" type="checkbox"></label><label>Mãos sólidas<input id="solidHands" type="checkbox"></label><label>Passthrough monocular experimental<input id="passthrough" type="checkbox"></label>
+<label>Seleção por permanência<input id="dwell" type="checkbox"></label><label>Corrigir sentido do sensor<input id="invertSensor" type="checkbox" checked></label><label>Inverter eixo horizontal<input id="invertYaw" type="checkbox"></label><label>Inverter eixo vertical<input id="invertPitch" type="checkbox"></label><label>Mãos sólidas<input id="solidHands" type="checkbox"></label><label>Passthrough monocular experimental<input id="passthrough" type="checkbox"></label>
 <button id="diagnostics">Diagnóstico real</button><button id="reset">Apagar preferências e projetos</button><button id="closeSettings">Fechar ajustes</button><pre id="device"></pre></aside>
 <section id="toolbox" hidden><h2 id="appTitle"></h2><div id="appBody"></div><button id="closeApp">Fechar aplicativo</button></section>
-<div id="toast" role="status"></div><footer><span id="status">Toque e arraste para olhar. Pinça para selecionar.</span><span id="metrics"></span><button id="settings">⚙ Ajustes</button><button id="select">Selecionar centro</button></footer>
+<div id="toast" role="status"></div><footer><span id="status">Toque e arraste para olhar. Mantenha o foco até o círculo completar.</span><span id="metrics"></span><button id="settings">⚙ Ajustes</button><button id="select">Selecionar centro</button></footer>
 <div id="reticle">◌</div><input id="file" type="file" accept="image/*,video/*" hidden>
 <script src="/vendor/three.min.js"></script><script src="/mediapipe/hands.js"></script><script src="/hands.js"></script><script src="/motion.js"></script><script src="/app.js"></script></body></html>
