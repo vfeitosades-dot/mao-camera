@@ -1,26 +1,6 @@
-<!doctype html>
-<html lang="pt-BR">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mão</title>
-<style>
-body{margin:0;background:#10151d;color:white;text-align:center;font:17px system-ui}
-button,select{padding:12px;border:0;border-radius:12px;font:inherit}button{background:#45edac;font-weight:bold}
-#preview{display:flex;width:100%;max-width:720px;margin:auto;background:#000}.eye{position:relative;width:100%;min-width:0}.eye.second{display:none}body.vr #preview{max-width:none;height:100dvh;align-items:center}body.vr .eye{width:50%}body.vr .eye.second{display:block}body.vr h2,body.vr label,body.vr #start,body.vr #status,body.vr #reset,body.vr #help{display:none}body.vr #assistant{display:none}#assistant{margin:8px auto;padding:10px;max-width:680px;border:1px solid #294738;border-radius:12px;color:#b9f8d8}body.vr #vr{position:fixed;right:8px;top:8px;z-index:5;opacity:.7;font-size:12px}
-video{display:block;width:100%;height:auto;transform:scaleX(-1)}
-canvas{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);touch-action:none}
-label{display:block;margin:12px}p{min-height:24px;padding:0 10px}
-</style>
-<h2>✋ Esqueleto da mão</h2>
-<button id="start">Ativar câmera</button>
-<label>Mãos: <select id="count"><option value="1">1 — mais leve</option><option value="2">2</option></select></label>
-<button id="reset">Novo cubo</button> <button id="vr">Modo VR</button>
-<p id="help">Área uniforme: cubo automático aproximado. Ou toque na imagem. Faça uma pinça com polegar e indicador dentro do cubo para pegar; abra para soltar. Segurando o cubo, gire a mão para rotacionar e aproxime-a para aumentar.</p>
-<p id="assistant" role="status">Assistente offline: ative a câmera para começar.</p>
-<p id="status">Mostre sua mão inteira para a câmera.</p>
-<div id="preview"><div class="eye"><video autoplay muted playsinline></video><canvas></canvas></div><div class="eye second"><video id="rightVideo" autoplay muted playsinline></video><canvas id="rightCanvas"></canvas></div></div>
-<script src="/mediapipe/hands.js"></script>
-<script>
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Painel espacial</title><style>
+body{margin:0;background:#10151d;color:#fff;text-align:center;font:16px system-ui}button,input,select{padding:10px;border:0;border-radius:12px;margin:3px}button{background:#c6e4ff;color:#102030}input{max-width:50%;background:#253249;color:white}#preview{display:flex;max-width:900px;margin:auto;background:#000}.eye{position:relative;width:100%;min-width:0}.second{display:none}video{display:block;width:100%}canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}#assistant{padding:10px;color:#b9e8ff}body.vr header,body.vr #assistant,body.vr #status{display:none}body.vr #preview{max-width:none;height:100dvh;align-items:center}body.vr .eye{width:50%}body.vr .second{display:block}#vr{position:fixed;right:5px;top:5px;z-index:10;opacity:.8}</style>
+<header><h3>Painel espacial</h3><button id="start">Ativar câmera traseira</button><select id="count"><option value="1">1 mão</option><option value="2">2 mãos</option></select><button id="reset">Reposicionar</button><div><input id="url" type="url" value="https://www.google.com" aria-label="Endereço do site"><button id="open">Abrir site</button><button id="draw">Desenhar 3D</button><button id="clear">Limpar</button></div></header><button id="vr">Modo VR</button><p id="assistant">Use a pinça para interagir com o painel.</p><p id="status">Sites abrem no navegador do celular. Desenho e painel funcionam offline.</p><div id="preview"><div class="eye"><video autoplay muted playsinline></video><canvas></canvas></div><div class="eye second"><video id="rightVideo" autoplay muted playsinline></video><canvas id="rightCanvas"></canvas></div></div><script src="/mediapipe/hands.js"></script><script>
 'use strict';
 const video=document.querySelector('video'),canvas=document.querySelector('canvas');
 const ctx=canvas.getContext('2d'),message=document.querySelector('#status');
@@ -31,112 +11,73 @@ let lastVideoTime=-1,lastInference=-Infinity;
 const interval=1000/20;
 const rightVideo=document.querySelector('#rightVideo'),rightCanvas=document.querySelector('#rightCanvas');
 const rightCtx=rightCanvas.getContext('2d');
-let vr=false,quad=null,grabbed=false,pinched=false,missed=0,offset={x:0,y:0};
-let lastSurface=-Infinity,candidate=null,stable=0;
-let grip=null,assistantEnabled=true;
+let vr=false,mode='painel',pinched=false,grabbing=false,grip=null;
+let panel={x:.5,y:.43,scale:1},strokes=[],activeStroke=null,lastHand=null;
 const assistant=document.querySelector('#assistant');
-const probe=document.createElement('canvas');probe.width=96;probe.height=72;
-const probeCtx=probe.getContext('2d',{willReadFrequently:true});
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-function place(x,y){quad={x:clamp(x,.18,.82),y:clamp(y,.18,.82),rx:-.35,ry:.55,rz:0,scale:1};grabbed=false;pinched=false;}
-function resetQuad(){quad=null;grabbed=false;pinched=false;candidate=null;stable=0;lastSurface=-Infinity;}
+function place(x,y){panel.x=clamp(x,.25,.75);panel.y=clamp(y,.25,.75);}
+function resetQuad(){strokes=[];activeStroke=null;mode='painel';panel={x:.5,y:.43,scale:1};}
+function panelBounds(){return {x:panel.x-.25*panel.scale,y:panel.y-.19*panel.scale,w:.5*panel.scale,h:.38*panel.scale};}
+function hitButton(x,y){
+ const b=panelBounds(),u=(x-b.x)/b.w,v=(y-b.y)/b.h;
+ if(v<.35||v>.84||u<.05||u>.95)return -1;
+ return Math.min(2,Math.floor((u-.05)/.3));
+}
+function openSite(){
+ const field=document.querySelector('#url');let value=field.value.trim();
+ if(!/^https?:\/\//i.test(value))value='https://'+value;
+ try{const u=new URL(value);if(!['https:','http:'].includes(u.protocol)||!u.hostname.includes('.'))throw Error();window.location.href=u.href;}catch(e){say('Digite um endereço de site válido.');}
+}
+function action(i){if(i===0)openSite();if(i===1){mode=mode==='desenho'?'painel':'desenho';activeStroke=null;}if(i===2){strokes=[];activeStroke=null;}}
 function gesture(points){
- if(!points){if(++missed>=3){grabbed=false;pinched=false;}return;}
- missed=0;
- const distance=(a,b)=>Math.hypot((a.x-b.x)*video.videoWidth,(a.y-b.y)*video.videoHeight);
- const palm=distance(points[0],points[9]);if(palm<10){grabbed=false;pinched=false;return;}
- const ratio=distance(points[4],points[8])/palm;
- const was=pinched;if(!pinched&&ratio<.32)pinched=true;else if(pinched&&ratio>.5)pinched=false;
+ lastHand=points;
+ if(!points){pinched=false;grabbing=false;activeStroke=null;return;}
+ const d=(a,b)=>Math.hypot((a.x-b.x)*video.videoWidth,(a.y-b.y)*video.videoHeight);
+ const palm=d(points[0],points[9]);if(palm<10)return;
+ const ratio=d(points[4],points[8])/palm,was=pinched;
+ if(!pinched&&ratio<.32)pinched=true;else if(pinched&&ratio>.5)pinched=false;
  const x=(points[4].x+points[8].x)/2,y=(points[4].y+points[8].y)/2;
- if(!pinched){grabbed=false;return;}
- if(quad&&!was&&hitCube(x,y,video.videoWidth,video.videoHeight)){grabbed=true;offset={x:quad.x-x,y:quad.y-y};grip={palm,angle:Math.atan2(points[5].y-points[17].y,points[5].x-points[17].x),rx:quad.rx,ry:quad.ry,rz:quad.rz,scale:quad.scale,x,y};}
- if(grabbed&&quad){quad.x=clamp(x+offset.x,.18,.82);quad.y=clamp(y+offset.y,.18,.82);if(grip){const angle=Math.atan2(points[5].y-points[17].y,points[5].x-points[17].x);quad.rz=grip.rz+Math.atan2(Math.sin(angle-grip.angle),Math.cos(angle-grip.angle));quad.rx=clamp(grip.rx+(y-grip.y)*2,-1.3,1.3);quad.ry=grip.ry+(x-grip.x)*3;quad.scale=clamp(grip.scale*palm/grip.palm,.55,1.6);}}
-}
-function findSurface(detected){
- const now=performance.now();if(quad||now-lastSurface<500)return;lastSurface=now;
- probeCtx.drawImage(video,0,0,96,72);
- const data=probeCtx.getImageData(0,0,96,72).data;
- let best=null;
- for(const cy of [32,44,56])for(const cx of [24,48,72]){
-  if(detected.some(hand=>hand.some(p=>Math.abs(p.x-cx/96)<.25&&Math.abs(p.y-cy/72)<.25)))continue;
-  let sum=0,square=0,n=0;
-  for(let y=cy-10;y<cy+10;y+=2)for(let x=cx-14;x<cx+14;x+=2){const i=(y*96+x)*4;const v=.299*data[i]+.587*data[i+1]+.114*data[i+2];sum+=v;square+=v*v;n++;}
-  const mean=sum/n,variance=square/n-mean*mean;
-  if(mean>30&&mean<225&&variance<180&&(!best||variance<best.score))best={x:cx/96,y:cy/72,score:variance};
+ if(!pinched){grabbing=false;activeStroke=null;return;}
+ if(!was){
+  const b=panelBounds();
+  if(x>b.x&&x<b.x+b.w&&y>b.y&&y<b.y+b.h*.28){grabbing=true;grip={x:panel.x-x,y:panel.y-y,palm,scale:panel.scale};return;}
+  const hit=hitButton(x,y);if(hit>=0){action(hit);activeStroke=null;return;}
+  if(mode==='desenho'){activeStroke=[];strokes.push(activeStroke);if(strokes.length>60)strokes.shift();}
  }
- if(!best){candidate=null;stable=0;return;}
- if(candidate&&Math.hypot(best.x-candidate.x,best.y-candidate.y)<.1)stable++;else stable=1;
- candidate=best;if(stable>=3)place(best.x,best.y);
-}
-const cubeVertices=[[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]];
-const cubeFaces=[[0,1,2,3],[4,7,6,5],[0,4,5,1],[3,2,6,7],[0,3,7,4],[1,5,6,2]];
-function cubeMesh(w,h){
- if(!quad)return [];
- const size=Math.min(w,h)*.14*quad.scale;
- const ax=Math.cos(quad.rx),bx=Math.sin(quad.rx),ay=Math.cos(quad.ry),by=Math.sin(quad.ry),az=Math.cos(quad.rz),bz=Math.sin(quad.rz);
- return cubeVertices.map(([x,y,z])=>{
-  const y1=y*ax-z*bx,z1=y*bx+z*ax;
-  const x2=x*ay+z1*by,z2=-x*by+z1*ay;
-  const x3=x2*az-y1*bz,y3=x2*bz+y1*az;
-  const perspective=4/(4+z2);
-  return {x:quad.x*w+x3*size*perspective,y:quad.y*h+y3*size*perspective,z:z2};
- });
-}
-function pointInFace(x,y,vertices){
- let inside=false;
- for(let i=0,j=vertices.length-1;i<vertices.length;j=i++){
-  const a=vertices[i],b=vertices[j];
-  if((a.y>y)!==(b.y>y)&&x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x)inside=!inside;
- }
- return inside;
-}
-function hitCube(x,y,w,h){
- if(!quad)return false;
- const mesh=cubeMesh(w,h);return cubeFaces.some(face=>pointInFace(x*w,y*h,face.map(i=>mesh[i])));
-}
-function paintQuad(c,w,h){
- if(!quad)return;
- const mesh=cubeMesh(w,h);
- // Faces mais distantes são desenhadas primeiro.
- const sorted=cubeFaces.map((indices,i)=>({indices,i,z:indices.reduce((s,j)=>s+mesh[j].z,0)/4})).sort((a,b)=>b.z-a.z);
- for(const face of sorted){
-  c.beginPath();face.indices.forEach((j,i)=>{const p=mesh[j];if(i)c.lineTo(p.x,p.y);else c.moveTo(p.x,p.y);});c.closePath();
-  const light=35+face.i*6;
-  c.fillStyle=grabbed?'hsla(156,75%,'+light+'%,.85)':'hsla(211,85%,'+light+'%,.82)';
-  c.fill();c.lineWidth=2;c.strokeStyle=grabbed?'#adffdb':'#b3d7ff';c.stroke();
+ if(grabbing){place(x+grip.x,y+grip.y);panel.scale=clamp(grip.scale*palm/grip.palm,.6,1.25);}
+ else if(mode==='desenho'&&activeStroke){
+  const z=clamp((palm/Math.max(video.videoHeight,1)-.3)*2,-.6,.6);
+  const point={x:(x-.5)*(2+z)/2,y:(y-.5)*(2+z)/2,z};
+  const last=activeStroke[activeStroke.length-1];
+  if(!last||Math.hypot(point.x-last.x,point.y-last.y,point.z-last.z)>.008)activeStroke.push(point);
+  if(activeStroke.length>700)activeStroke.shift();
  }
 }
-function classifyGesture(points){
- if(!points)return 'ausente';
- const d=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
- const palm=d(points[0],points[9]);if(palm<.025)return 'distante';
- if(d(points[4],points[8])/palm<.35)return 'pinça';
- const raised=[8,12,16,20].filter(i=>d(points[i],points[0])>d(points[i-2],points[0])*1.18).length;
- return raised>=3?'aberta':raised===0?'fechada':'mão';
+function project(p,w,h,eye=0){const f=2/(2+p.z);return{x:(.5+p.x*f+eye*p.z*.01)*w,y:(.5+p.y*f)*h};}
+function paintScene(c,w,h,eye=0){
+ c.lineCap='round';c.lineJoin='round';
+ for(const stroke of strokes){if(stroke.length<2)continue;c.beginPath();stroke.forEach((p,i)=>{const v=project(p,w,h,eye);if(i)c.lineTo(v.x,v.y);else c.moveTo(v.x,v.y);});c.strokeStyle='#69f5ff';c.lineWidth=4;c.stroke();}
+ const b=panelBounds(),x=b.x*w,y=b.y*h,bw=b.w*w,bh=b.h*h;
+ c.fillStyle='rgba(6,12,24,.3)';c.fillRect(x+8,y+10,bw,bh);
+ c.beginPath();c.roundRect(x,y,bw,bh,18);c.fillStyle='rgba(23,31,48,.93)';c.fill();c.strokeStyle='rgba(200,225,255,.55)';c.lineWidth=1;c.stroke();
+ c.fillStyle='#f2f6ff';c.font='bold '+Math.max(12,bw*.055)+'px sans-serif';c.textAlign='center';
+ c.fillText('PAINEL ESPACIAL',x+bw/2,y+bh*.18);
+ const labels=['Abrir site',mode==='desenho'?'Sair desenho':'Desenhar 3D','Limpar'];
+ labels.forEach((label,i)=>{const bx=x+bw*(.05+.3*i),by=y+bh*.35;c.beginPath();c.roundRect(bx,by,bw*.27,bh*.49,10);c.fillStyle=i===1&&mode==='desenho'?'#17696d':'#35435d';c.fill();c.fillStyle='white';c.font=Math.max(10,bw*.041)+'px sans-serif';c.fillText(label,bx+bw*.135,by+bh*.27);});
+ c.textAlign='start';
 }
-function advise(points){
- if(!assistantEnabled)return;
- const kind=classifyGesture(points);
- const text=grabbed?'Cubo na mão! Gire o pulso para rotacionar; aproxime para aumentar. Abra a pinça para soltar.':
- kind==='ausente'?'Mostre a mão inteira, com boa iluminação.':
- kind==='distante'?'Aproxime um pouco sua mão da câmera.':
- !quad?'Mostre uma área uniforme ou toque para criar seu cubo.':
- kind==='pinça'?'Abra os dedos, coloque polegar e indicador sobre o cubo e feche a pinça.':
- kind==='fechada'?'Abra a mão e una apenas polegar e indicador sobre o cubo.':
- 'Mão detectada. Una polegar e indicador sobre o cubo para pegar.';
- const value='Assistente offline: '+text;
- if(assistant.textContent!==value)assistant.textContent=value;
+function advise(){const text=grabbing?'Mova a mão para posicionar o painel. Aproxime para aumentar.':mode==='desenho'?'Faça pinça fora do painel para desenhar. Abra para terminar o traço.':'Faça pinça em uma opção. Segure a barra superior para mover o painel.';
+ if(assistant.textContent!==text)assistant.textContent=text;
 }
-for(const layer of [canvas,rightCanvas])layer.addEventListener('pointerdown',event=>{
- if(!running)return;const r=layer.getBoundingClientRect();place(1-(event.clientX-r.left)/r.width,(event.clientY-r.top)/r.height);
-});
 document.querySelector('#reset').onclick=resetQuad;
+document.querySelector('#open').onclick=openSite;
+document.querySelector('#draw').onclick=()=>action(1);
+document.querySelector('#clear').onclick=()=>action(2);
 document.querySelector('#vr').onclick=async()=>{
  vr=!vr;document.body.classList.toggle('vr',vr);document.querySelector('#vr').textContent=vr?'Sair VR':'Modo VR';
  if(vr){rightVideo.srcObject=stream;rightVideo.play().catch(()=>{});try{await document.documentElement.requestFullscreen();}catch(e){}try{await screen.orientation.lock('landscape');}catch(e){}}
  else{rightVideo.pause();try{screen.orientation.unlock();}catch(e){}if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});}
 };
-
 function say(text){if(message.textContent!==text)message.textContent=text;}
 function cancelFrame(){
  if(video.cancelVideoFrameCallback)video.cancelVideoFrameCallback(callback);
@@ -145,7 +86,7 @@ function cancelFrame(){
 function stop(){
  ++epoch;running=false;cancelFrame();
  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
- rightVideo.pause();rightVideo.srcObject=null;grabbed=false;pinched=false;
+ rightVideo.pause();rightVideo.srcObject=null;grabbing=false;pinched=false;
  rightCtx.clearRect(0,0,rightCanvas.width,rightCanvas.height);
  video.srcObject=null;ctx.clearRect(0,0,canvas.width,canvas.height);
  button.hidden=false;button.disabled=false;count.disabled=false;
@@ -157,7 +98,7 @@ function draw(result){
  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
  ctx.clearRect(0,0,w,h);
  const detected=result.multiHandLandmarks||[];
- gesture(detected[0]);findSurface(detected);advise(detected[0]);
+ gesture(detected[0]);advise();
  ctx.strokeStyle='#45edac';ctx.lineWidth=3;ctx.lineCap='round';
  ctx.fillStyle='#fff';
  for(const points of detected){
@@ -167,9 +108,9 @@ function draw(result){
   for(const p of points){ctx.moveTo(p.x*w+4,p.y*h);ctx.arc(p.x*w,p.y*h,4,0,Math.PI*2);}
   ctx.fill();
  }
- paintQuad(ctx,w,h);
+ paintScene(ctx,w,h);
  if(vr){if(rightCanvas.width!==w||rightCanvas.height!==h){rightCanvas.width=w;rightCanvas.height=h;}rightCtx.clearRect(0,0,w,h);rightCtx.drawImage(canvas,0,0);}
- say(grabbed?'Cubo segurado — abra a pinça para soltar.':quad?'Faça uma pinça dentro do cubo para pegar.':'Mostre uma área uniforme ou toque para criar o cubo.');
+ say(detected.length?'Mão detectada — use a pinça.':'Mostre sua mão para interagir.');
 }
 function schedule(token){
  if(!running||token!==epoch)return;
@@ -194,15 +135,14 @@ button.onclick=async()=>{
   if(!hands){hands=new Hands({locateFile:f=>'/mediapipe/'+f});hands.onResults(draw);}
   await hands.setOptions({maxNumHands:Number(count.value),modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.6});
   if(token!==epoch)return;
-  const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{exact:'user'},width:{ideal:480,max:640},height:{ideal:360,max:480},frameRate:{ideal:24,max:24}}});
+  const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{exact:'environment'},width:{ideal:480,max:640},height:{ideal:360,max:480},frameRate:{ideal:24,max:24}}});
   if(token!==epoch||document.hidden){acquired.getTracks().forEach(t=>t.stop());return;}
   stream=acquired;video.srcObject=stream;await video.play();if(vr){rightVideo.srcObject=stream;await rightVideo.play();}
   if(token!==epoch)return;
   running=true;lastVideoTime=-1;lastInference=-Infinity;button.hidden=true;
   say('Mostre sua mão para a câmera.');schedule(token);
- }catch(error){if(token===epoch){stop();say(error.name==='OverconstrainedError'?'Câmera frontal indisponível neste dispositivo.':'Confira a permissão da câmera e tente novamente.');}}
+ }catch(error){if(token===epoch){stop();say(error.name==='OverconstrainedError'?'Câmera traseira indisponível neste dispositivo.':'Confira a permissão da câmera e tente novamente.');}}
 };
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stop();say('Câmera pausada. Toque em Ativar câmera para continuar.');}});
 window.addEventListener('pagehide',stop);
-</script>
-</html>
+</script></html>

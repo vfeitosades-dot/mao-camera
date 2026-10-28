@@ -1,4 +1,4 @@
 plugins { id 'com.android.application' }
 android { namespace 'br.app.mao'; compileSdk 35
- defaultConfig { applicationId 'br.app.mao'; minSdk 26; targetSdk 35; versionCode 5; versionName '1.4' }
+ defaultConfig { applicationId 'br.app.mao'; minSdk 26; targetSdk 35; versionCode 6; versionName '1.5' }
 }

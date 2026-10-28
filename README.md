@@ -1,20 +1,13 @@
-# Mão câmera 1.4 — cubo 3D e assistente offline
+# Painel espacial 1.5
 
 [Baixar APK](https://github.com/vfeitosades-dot/mao-camera/releases/latest)
 
-Android 8+, câmera frontal e detector MediaPipe Hands incluído no APK, sem necessidade de internet inclusive no primeiro uso. As imagens são processadas no dispositivo, sem gravação pelo app.
+Câmera traseira obrigatória. Cubo removido; painel flutuante com visual inspirado em interfaces VR. Não é software Meta Quest.
 
-- Câmera frontal obrigatória, imagem espelhada.
-- Um cubo aparece ao encontrar por três amostras uma área de baixa variação de cor. Se não aparecer, toque na imagem. Novo cubo reinicia a busca.
-- Una polegar e indicador dentro do cubo para segurar e mover. Separe os dedos para soltar.
-- Modo VR apresenta a mesma câmera em duas vistas. Use o celular na horizontal; Sair VR retorna à vista normal.
+Use pinça na barra superior para mover o painel; aproxime a mão para aumentar. Pinça em Abrir site abre o endereço informado no navegador externo do celular. Sites precisam de internet; o app mantém a permissão INTERNET removida.
 
-Limitações: a busca de superfície é uma heurística de imagem, pode confundir fundos uniformes e não reconhece planos ou profundidade. O cubo fica em coordenadas da tela e não ancorado ao mundo físico. VR é uma apresentação lado a lado monoscópica, sem rastreamento de cabeça nem estereoscopia. Não use ao caminhar.
+Desenhar 3D ativa traços espaciais: faça pinça fora do painel e abra para encerrar um traço. A profundidade é estimada pelo tamanho da mão na imagem, não medida fisicamente. Limpar apaga os traços. Limite de 60 traços e 700 pontos por traço para controlar memória. Reposicionar também limpa o desenho.
 
-Compilação automática pelo GitHub Actions, Gradle 8.9, JDK 17 e SDK 35. Versão de teste assinada com chave de debug; pode exigir desinstalar a anterior. Testes de lógica com câmera simulada; ainda não validado em celular físico.
+Painel, gestos, desenho e assistente funcionam offline. Modo VR apresenta duas vistas da mesma câmera, sem rastreamento de cabeça nem estereoscopia real. Objetos permanecem em coordenadas da tela e não presos a superfícies físicas.
 
-
-O APK inclui JavaScript, WebAssembly, dados e modelos do pacote @mediapipe/hands 0.4.1675469240. O workflow testa o detector no Chrome bloqueando recursos externos antes de compilar. O app não solicita permissão INTERNET. Para instalar esta atualização pode ser necessário desinstalar a anterior.
-
-
-O cubo usa geometria 3D com projeção em perspectiva e faces sombreadas. Segure com pinça, gire o pulso e aproxime a mão para mudar rotação e escala. A escala é uma estimativa pelo tamanho da mão na imagem, não uma medida física de profundidade. O assistente combina o detector neural MediaPipe com regras locais para orientar pinça, mão aberta/fechada e ausência de mão. Não é um chatbot generativo. Continua offline, inclusive no primeiro uso. VR mantém duas vistas monoscópicas.
+Android 8+, WebView atualizado. O APK é compilado e testado em Chrome pelo GitHub Actions, incluindo execução do MediaPipe sem recursos externos. Ainda não validado em celular físico. Chave de debug pode exigir desinstalar a versão anterior.
