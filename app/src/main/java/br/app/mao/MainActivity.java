@@ -24,6 +24,6 @@ public class MainActivity extends Activity {
  public void onRequestPermissionsResult(int code,String[] permissions,int[] result){super.onRequestPermissionsResult(code,permissions,result);if(cameraRequest!=null){if(result.length>0&&result[0]==PackageManager.PERMISSION_GRANTED)cameraRequest.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});else cameraRequest.deny();cameraRequest=null;}}
  protected void onActivityResult(int code,int result,Intent data){super.onActivityResult(code,result,data);if(code==2&&fileRequest!=null){fileRequest.onReceiveValue(result==RESULT_OK&&data!=null?new Uri[]{data.getData()}:null);fileRequest=null;}}
  protected void onPause(){if(device!=null)device.pause();if(web!=null){web.evaluateJavascript("window.Pocket&&Pocket.pause()",null);web.onPause();}super.onPause();}
- protected void onResume(){super.onResume();if(device!=null)device.resume();if(web!=null)web.onResume();}
+ protected void onResume(){super.onResume();if(device!=null)device.resume();if(web!=null){web.onResume();web.evaluateJavascript("window.Pocket&&Pocket.resume()",null);}}
  protected void onDestroy(){if(device!=null)device.pause();if(cameraRequest!=null)cameraRequest.deny();if(fileRequest!=null)fileRequest.onReceiveValue(null);if(web!=null)web.destroy();super.onDestroy();}
 }
