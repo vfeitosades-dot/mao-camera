@@ -25,6 +25,25 @@ const { chromium } = require('playwright');
    external.push(url); return route.abort();
   });
   await page.goto(origin + '/index.html');
+  const cubeChecks=await page.evaluate(()=>{
+   place(.5,.5);
+   const mesh=cubeMesh(640,480);
+   if(mesh.length!==8||!mesh.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)))throw Error('Projeção inválida');
+   if(!hitCube(.5,.5,640,480)||hitCube(.01,.01,640,480))throw Error('Área de interação incorreta');
+   Object.defineProperty(video,'videoWidth',{value:640,configurable:true});Object.defineProperty(video,'videoHeight',{value:480,configurable:true});
+   const hand=Array.from({length:21},()=>({x:.5,y:.55}));
+   hand[0]={x:.5,y:.85};hand[9]={x:.5,y:.45};hand[5]={x:.35,y:.55};hand[17]={x:.65,y:.55};hand[4]={x:.49,y:.5};hand[8]={x:.51,y:.5};
+   if(classifyGesture(hand)!=='pinça'||classifyGesture(null)!=='ausente')throw Error('Classificação de gesto incorreta');
+   gesture(hand);if(!grabbed)throw Error('Pinça não pegou cubo');
+   hand[0].y=.95;hand[9].y=.35;hand[4].x=.59;hand[8].x=.61;hand[5].y=.65;
+   gesture(hand);
+   if(quad.scale<=1||Math.abs(quad.rz)<.01||Math.abs(quad.x-.6)>.001)throw Error('Transformação 3D não acompanhou mão');
+   hand[4].x=.2;hand[8].x=.9;gesture(hand);if(grabbed)throw Error('Cubo não soltou');
+   advise(null);if(!assistant.textContent.includes('Mostre a mão'))throw Error('Assistente não orientou usuário');
+   resetQuad();delete video.videoWidth;delete video.videoHeight;
+   return true;
+  });
+  assert.equal(cubeChecks,true);
   const result = await page.evaluate(async () => {
    const detector = new Hands({locateFile:f=>'/mediapipe/'+f});
    detector.setOptions({maxNumHands:1,modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.6});
