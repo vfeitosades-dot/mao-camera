@@ -113,5 +113,5 @@ function tick(now){requestAnimationFrame(tick);const dt=Math.min((now-last)/1000
  if(navigator.getGamepads){const pad=Array.from(navigator.getGamepads()).find(Boolean);if(pad){const ax=pad.axes[0]||0,ay=pad.axes[1]||0;if(Math.abs(ax)+Math.abs(ay)>.2){config.tracking='manual';orientation.multiply(new T.Quaternion().setFromEuler(new T.Euler(-ay*dt,-ax*dt,0,'YXZ')));}if(pad.buttons[0]?.pressed&&!tick.gamePressed){press(new T.Vector2());release();}tick.gamePressed=pad.buttons[0]?.pressed;}}
  render();}
 applyQuality();buildWorld(config.environment);openLibrary();createDock();showDiagnostics();document.body.classList.remove('settings');requestAnimationFrame(tick);
-window.PocketTest={screenPointer,scene,camera,stereo,renderer,config,state,visual,render,resize,openLibrary,openApp,project,hitTest,notify,setVR:value=>{state.vr=value;resize();},orientation,windows,pipeline};
+window.PocketTest={screenPointer,scene,camera,stereo,renderer,config,state,visual,render,resize,openLibrary,openApp,hitTest,notify,setVR:value=>{state.vr=value;resize();},orientation,windows,pipeline};
 })();
