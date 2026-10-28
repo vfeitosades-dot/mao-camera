@@ -33,10 +33,20 @@ jobs:
           test -s app/src/main/assets/mediapipe/hand_landmark_lite.tflite
           test -s app/src/main/assets/mediapipe/hands_solution_simd_wasm_bin.wasm
           test -s app/src/main/assets/mediapipe/hands_solution_wasm_bin.wasm
+      - name: Incluir modelo facial offline
+        run: |
+          mkdir -p app/src/main/assets/facemesh
+          curl --fail --location --retry 3 https://registry.npmjs.org/@mediapipe/face_mesh/-/face_mesh-0.4.1633559619.tgz -o "$RUNNER_TEMP/face.tgz"
+          tar -xzf "$RUNNER_TEMP/face.tgz" --strip-components=1 -C app/src/main/assets/facemesh
+          test -s app/src/main/assets/facemesh/face_mesh.js
       - name: Testar detector sem rede externa
         run: |
           npm install --prefix "$RUNNER_TEMP/offline-check" --no-audit --no-fund playwright@1.56.1
           NODE_PATH="$RUNNER_TEMP/offline-check/node_modules" node scripts/check-offline.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: visual-preview
+          path: ui-preview.png
       - name: Compilar APK
         run: gradle --no-daemon assembleDebug
       - name: Preparar download

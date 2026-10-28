@@ -1,6 +1,14 @@
 <!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Painel espacial</title><style>
-body{margin:0;background:#10151d;color:#fff;text-align:center;font:16px system-ui}button,input,select{padding:10px;border:0;border-radius:12px;margin:3px}button{background:#c6e4ff;color:#102030}input{max-width:50%;background:#253249;color:white}#preview{display:flex;max-width:900px;margin:auto;background:#000}.eye{position:relative;width:100%;min-width:0}.second{display:none}video{display:block;width:100%}canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}#assistant{padding:10px;color:#b9e8ff}body.vr header,body.vr #assistant,body.vr #status{display:none}body.vr #preview{max-width:none;height:100dvh;align-items:center}body.vr .eye{width:50%}body.vr .second{display:block}#vr{position:fixed;right:5px;top:5px;z-index:10;opacity:.8}</style>
-<header><h3>Painel espacial</h3><button id="start">Ativar câmera traseira</button><select id="count"><option value="1">1 mão</option><option value="2">2 mãos</option></select><button id="reset">Reposicionar</button><div><input id="url" type="url" value="https://www.google.com" aria-label="Endereço do site"><button id="open">Abrir site</button><button id="draw">Desenhar 3D</button><button id="clear">Limpar</button></div></header><button id="vr">Modo VR</button><p id="assistant">Use a pinça para interagir com o painel.</p><p id="status">Sites abrem no navegador do celular. Desenho e painel funcionam offline.</p><div id="preview"><div class="eye"><video autoplay muted playsinline></video><canvas></canvas></div><div class="eye second"><video id="rightVideo" autoplay muted playsinline></video><canvas id="rightCanvas"></canvas></div></div><script src="/mediapipe/hands.js"></script><script>
+body{margin:0;background:#10151d;color:#fff;text-align:center;font:16px system-ui}button,input,select{padding:10px;border:0;border-radius:12px;margin:3px}button{background:#c6e4ff;color:#102030}input{max-width:50%;background:#253249;color:white}#preview{display:flex;max-width:900px;margin:auto;background:#000}.eye{position:relative;width:100%;min-width:0}.second{display:none}video{display:block;width:100%}canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}#assistant{padding:10px;color:#b9e8ff}body.vr header,body.vr #assistant,body.vr #status{display:none}body.vr #preview{max-width:none;height:100dvh;align-items:center}body.vr .eye{width:50%}body.vr .second{display:block}#vr{position:fixed;right:5px;top:5px;z-index:10;opacity:.8}
+:root{color-scheme:dark}body{background:radial-gradient(ellipse at 20% 0%,#283e67,#090d16 70%);font-family:system-ui,-apple-system,sans-serif}
+header{position:relative;z-index:2;max-width:960px;margin:16px auto 8px;padding:18px;border:1px solid #ffffff25;border-radius:28px;background:linear-gradient(135deg,#ffffff15,#ffffff06);box-shadow:0 20px 70px #0005;backdrop-filter:blur(24px)}
+header h3{font-size:24px;font-weight:550;letter-spacing:-.8px;margin:2px 0 16px}button,select,input{border:1px solid #ffffff20;border-radius:15px;padding:12px 16px;min-height:44px;font:inherit}
+button{background:#ffffff16;color:#eff6ff;box-shadow:inset 0 1px #ffffff15;transition:background .15s,transform .15s}button:active{transform:scale(.96);background:#6294ff}#start,#open{background:#d4e7ff;color:#14243c;font-weight:650}
+input{background:#070e1d88;min-width:180px}#preview{position:relative;max-width:1100px;border:1px solid #ffffff20;border-radius:30px;overflow:hidden;box-shadow:0 25px 90px #0008}#assistant{font-size:14px;color:#bfd3f3}#status{font-size:13px;color:#8fa2bc}
+#gazeState{color:#c6b5ff;font-size:13px;margin:5px}#calibrationTarget{position:fixed;z-index:999;color:#efe8ff;font-size:46px;line-height:1;transform:translate(-50%,-50%);text-shadow:0 0 24px #8f6bff;pointer-events:none}body.vr #gazeState{display:none}body.vr #preview{border-radius:0;border:0}
+@media(max-width:600px){header{margin:8px;padding:12px;border-radius:22px}button,select,input{padding:10px;font-size:13px}header h3{font-size:22px}#preview{border-radius:20px}#assistant{margin:6px;padding:6px}}
+</style>
+<header><h3>◈ Orbit <span style='font-size:12px;color:#9db1d1;letter-spacing:2px'>SPATIAL WORKSPACE</span></h3><button id="start">Ativar câmera traseira</button><select id="count"><option value="1">1 mão</option><option value="2">2 mãos</option></select><button id="reset">Reposicionar</button><div><input id="url" type="url" value="https://www.google.com" aria-label="Endereço do site"><button id="open">Abrir site</button><button id="draw">Desenhar 3D</button><button id="clear">⌫ Limpar traços</button><button id="gaze">Olhar · câmera frontal</button><button id="calibrate" hidden>Calibrar olhar (5 pontos)</button></div></header><button id="vr">Modo VR</button><p id="assistant">Use a pinça para interagir com o painel.</p><div id="calibrationTarget" hidden>●</div><p id="gazeState">Olhar experimental: precisa ver seu rosto com a câmera frontal.</p><p id="status">Navegador interno com teclado flutuante · desenho e detectores offline.</p><div id="preview"><div class="eye"><video autoplay muted playsinline></video><canvas></canvas></div><div class="eye second"><video id="rightVideo" autoplay muted playsinline></video><canvas id="rightCanvas"></canvas></div></div><script src="/mediapipe/hands.js"></script><script src="/facemesh/face_mesh.js"></script><script>
 'use strict';
 const video=document.querySelector('video'),canvas=document.querySelector('canvas');
 const ctx=canvas.getContext('2d'),message=document.querySelector('#status');
@@ -58,13 +66,13 @@ function paintScene(c,w,h,eye=0){
  c.lineCap='round';c.lineJoin='round';
  for(const stroke of strokes){if(stroke.length<2)continue;c.beginPath();stroke.forEach((p,i)=>{const v=project(p,w,h,eye);if(i)c.lineTo(v.x,v.y);else c.moveTo(v.x,v.y);});c.strokeStyle='#69f5ff';c.lineWidth=4;c.stroke();}
  const b=panelBounds(),x=b.x*w,y=b.y*h,bw=b.w*w,bh=b.h*h;
- c.fillStyle='rgba(6,12,24,.3)';c.fillRect(x+8,y+10,bw,bh);
- c.beginPath();c.roundRect(x,y,bw,bh,18);c.fillStyle='rgba(23,31,48,.93)';c.fill();c.strokeStyle='rgba(200,225,255,.55)';c.lineWidth=1;c.stroke();
+ c.save();c.shadowColor='rgba(0,0,0,.55)';c.shadowBlur=22;c.shadowOffsetY=12;
+ c.beginPath();c.roundRect(x,y,bw,bh,18);const glass=c.createLinearGradient(x,y,x+bw,y+bh);glass.addColorStop(0,'rgba(55,68,95,.96)');glass.addColorStop(1,'rgba(14,21,38,.94)');c.fillStyle=glass;c.fill();c.restore();c.strokeStyle='rgba(200,225,255,.55)';c.lineWidth=1;c.stroke();
  c.fillStyle='#f2f6ff';c.font='bold '+Math.max(12,bw*.055)+'px sans-serif';c.textAlign='center';
- c.fillText('PAINEL ESPACIAL',x+bw/2,y+bh*.18);
- const labels=['Abrir site',mode==='desenho'?'Sair desenho':'Desenhar 3D','Limpar'];
+ c.fillText('◈  ORBIT  /  HOME',x+bw/2,y+bh*.18);
+ const labels=['◎ Navegador',mode==='desenho'?'◉ Desenhando':'✎ Studio 3D','⌫ Limpar'];
  labels.forEach((label,i)=>{const bx=x+bw*(.05+.3*i),by=y+bh*.35;c.beginPath();c.roundRect(bx,by,bw*.27,bh*.49,10);c.fillStyle=i===1&&mode==='desenho'?'#17696d':'#35435d';c.fill();c.fillStyle='white';c.font=Math.max(10,bw*.041)+'px sans-serif';c.fillText(label,bx+bw*.135,by+bh*.27);});
- c.textAlign='start';
+ c.beginPath();c.roundRect(x+bw*.25,y+bh+12,bw*.5,9,5);c.fillStyle='rgba(227,239,255,.65)';c.fill();c.textAlign='start';
 }
 function advise(){const text=grabbing?'Mova a mão para posicionar o painel. Aproxime para aumentar.':mode==='desenho'?'Faça pinça fora do painel para desenhar. Abra para terminar o traço.':'Faça pinça em uma opção. Segure a barra superior para mover o painel.';
  if(assistant.textContent!==text)assistant.textContent=text;
@@ -122,7 +130,7 @@ async function frame(now,token){
  if(video.readyState<2||video.currentTime===lastVideoTime||now-lastInference<interval){schedule(token);return;}
  lastVideoTime=video.currentTime;lastInference=now;
  try{
-  pending=hands.send({image:video});await pending;
+  pending=gazeMode?faceDetector.send({image:video}):hands.send({image:video});await pending;
   schedule(token);
  }catch(error){if(token===epoch){stop();say('Falha no detector. Feche e abra o app para reiniciar o detector.');}}
 }
@@ -132,10 +140,11 @@ button.onclick=async()=>{
   await pending.catch(()=>{});
   if(token!==epoch)return;
   say('Carregando detector…');
+  if(gazeMode&&!faceDetector){faceDetector=new FaceMesh({locateFile:f=>'/facemesh/'+f});faceDetector.onResults(faceResults);await faceDetector.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:.6,minTrackingConfidence:.6});}
   if(!hands){hands=new Hands({locateFile:f=>'/mediapipe/'+f});hands.onResults(draw);}
   await hands.setOptions({maxNumHands:Number(count.value),modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.6});
   if(token!==epoch)return;
-  const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{exact:'environment'},width:{ideal:480,max:640},height:{ideal:360,max:480},frameRate:{ideal:24,max:24}}});
+  const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{exact:gazeMode?'user':'environment'},width:{ideal:480,max:640},height:{ideal:360,max:480},frameRate:{ideal:24,max:24}}});
   if(token!==epoch||document.hidden){acquired.getTracks().forEach(t=>t.stop());return;}
   stream=acquired;video.srcObject=stream;await video.play();if(vr){rightVideo.srcObject=stream;await rightVideo.play();}
   if(token!==epoch)return;
@@ -145,4 +154,62 @@ button.onclick=async()=>{
 };
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stop();say('Câmera pausada. Toque em Ativar câmera para continuar.');}});
 window.addEventListener('pagehide',stop);
+let gazeMode=false,faceDetector=null,gazeFeature=null,gazeSamples=[],gazeCalibration=[],gazeModel=null,gazePoint=null,gazeLast=0,collecting=false,calibrationIndex=0;
+const gazeTargets=[[.5,.5],[.12,.5],[.88,.5],[.5,.15],[.5,.85]];
+function eyeFeature(p){
+ if(!p||p.length<478)return null;
+ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+ if(distance(p[159],p[145])/distance(p[33],p[133])<.12||distance(p[386],p[374])/distance(p[362],p[263])<.12)return null;
+ function eye(iris,a,b,top,bottom){const u=p[a],v=p[b],q=p[iris],dx=v.x-u.x,dy=v.y-u.y,length=dx*dx+dy*dy;if(length<.0001)return null;return{x:((q.x-u.x)*dx+(q.y-u.y)*dy)/length,y:(q.y-(p[top].y+p[bottom].y)/2)/Math.sqrt(length)};}
+ const l=eye(468,33,133,159,145),r=eye(473,362,263,386,374);if(!l||!r)return null;
+ return{x:(l.x+r.x)/2,y:(l.y+r.y)/2,headX:p[1].x,headY:p[1].y};
+}
+function calibratedGaze(f,m){
+ if(!f||!m||Math.hypot(f.headX-m.headX,f.headY-m.headY)>.1)return null;
+ const x=.5+(f.x-m.cx)*((f.x-m.cx)*(m.left-m.cx)>=0?-.38/(m.left-m.cx):.38/(m.right-m.cx));
+ const y=.5+(f.y-m.cy)*((f.y-m.cy)*(m.up-m.cy)>=0?-.35/(m.up-m.cy):.35/(m.down-m.cy));
+ if(!Number.isFinite(x)||!Number.isFinite(y))return null;return{x:clamp(x,0,1),y:clamp(y,0,1)};
+}
+function faceResults(result){
+ gazeFeature=eyeFeature((result.multiFaceLandmarks||[])[0]);gazeLast=performance.now();
+ if(!gazeFeature){gazePoint=null;return;}
+ if(collecting&&performance.now()>captureAfter)gazeSamples.push(gazeFeature);
+ const p=calibratedGaze(gazeFeature,gazeModel);
+ if(p){gazePoint=gazePoint?{x:gazePoint.x*.7+p.x*.3,y:gazePoint.y*.7+p.y*.3}:p;}else gazePoint=null;
+ if(gazeMode){paintGaze();document.querySelector('#gazeState').textContent=!gazeModel?'Calibre para estimar o olhar':p?'Estimativa experimental do olhar':'Mantenha o rosto na posição da calibração';}
+}
+function paintGaze(){
+ const w=video.videoWidth,h=video.videoHeight;if(!w)return;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}ctx.clearRect(0,0,w,h);paintScene(ctx,w,h);
+ if(gazePoint&&performance.now()-gazeLast<300){ctx.beginPath();ctx.arc(gazePoint.x*w,gazePoint.y*h,10,0,Math.PI*2);ctx.strokeStyle='#c8baff';ctx.lineWidth=3;ctx.stroke();}
+ if(vr){if(rightCanvas.width!==w||rightCanvas.height!==h){rightCanvas.width=w;rightCanvas.height=h;}rightCtx.clearRect(0,0,w,h);rightCtx.drawImage(canvas,0,0);}
+}
+let captureAfter=0;
+async function captureGaze(){
+ if(!gazeMode||!running||collecting)return;
+ const target=document.querySelector('#calibrationTarget');
+ if(calibrationIndex===0){gazeCalibration=[];gazeModel=null;}
+ const pos=gazeTargets[calibrationIndex];target.hidden=false;target.style.left=(pos[0]*100)+'%';target.style.top=(pos[1]*100)+'%';target.textContent='●';
+ document.querySelector('#gazeState').textContent='Olhe para o ponto sem mover a cabeça. Aguarde…';
+ collecting=true;gazeSamples=[];captureAfter=performance.now()+1000;
+ const token=epoch;await new Promise(r=>setTimeout(r,2700));collecting=false;
+ if(token!==epoch||!gazeMode){target.hidden=true;return;}
+ if(gazeSamples.length<10){say('Não consegui ler seus olhos. Melhore a iluminação e tente novamente.');return;}
+ const median=key=>gazeSamples.map(f=>f[key]).sort((a,b)=>a-b)[Math.floor(gazeSamples.length/2)];
+ gazeCalibration.push({x:median('x'),y:median('y'),headX:median('headX'),headY:median('headY')});calibrationIndex++;
+ target.hidden=true;
+ if(calibrationIndex===5){
+  const [c,l,r,u,d]=gazeCalibration;
+  if(Math.abs(l.x-r.x)<.015||Math.abs(u.y-d.y)<.015||(l.x-c.x)*(r.x-c.x)>=0||(u.y-c.y)*(d.y-c.y)>=0){say('Calibração inconsistente. Recomece mantendo a cabeça imóvel.');gazeModel=null;}
+  else{gazeModel={cx:c.x,cy:c.y,left:l.x,right:r.x,up:u.y,down:d.y,headX:c.headX,headY:c.headY};say('Calibração concluída. Cursor aproximado, sem clicar automaticamente.');}
+  calibrationIndex=0;
+ }
+ document.querySelector('#calibrate').textContent=calibrationIndex?'Próximo ponto ('+(calibrationIndex+1)+'/5)':'Calibrar olhar (5 pontos)';
+}
+document.querySelector('#calibrate').onclick=captureGaze;
+document.querySelector('#gaze').onclick=async()=>{
+ stop();await pending.catch(()=>{});gazeMode=!gazeMode;gazePoint=null;gazeModel=null;calibrationIndex=0;
+ document.querySelector('#gaze').textContent=gazeMode?'Voltar à traseira':'Olhar · câmera frontal';document.querySelector('#calibrate').hidden=!gazeMode;
+ document.querySelector('#calibrationTarget').hidden=true;button.textContent=gazeMode?'Ativar câmera frontal':'Ativar câmera traseira';button.onclick();
+};
+
 </script></html>

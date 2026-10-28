@@ -41,6 +41,21 @@ const { chromium } = require('playwright');
    paintScene(ctx,640,480);advise();
    resetQuad();delete video.videoWidth;delete video.videoHeight;return true;
   });assert.equal(panelChecks,true);
+  const gazeCheck=await page.evaluate(()=>{
+   const m={cx:.5,cy:0,left:.3,right:.7,up:-.1,down:.1,headX:.5,headY:.5};
+   const p=calibratedGaze({x:.3,y:0,headX:.5,headY:.5},m);
+   if(Math.abs(p.x-.12)>.01)throw Error('Calibração horizontal falhou');
+   if(calibratedGaze({x:.5,y:0,headX:.9,headY:.5},m)!==null)throw Error('Movimento de cabeça deve invalidar cursor');
+   if(eyeFeature([])!==null)throw Error('Sem íris não pode haver estimativa');
+   return true;
+  });assert.equal(gazeCheck,true);
+  const faceResult=await page.evaluate(async()=>{
+   const model=new FaceMesh({locateFile:f=>'/facemesh/'+f});await model.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:.6,minTrackingConfidence:.6});
+   let received=false;model.onResults(()=>{received=true});
+   const image=document.createElement('canvas');image.width=480;image.height=360;
+   image.getContext('2d').fillRect(0,0,480,360);await model.send({image});await model.close();return received;
+  });assert.equal(faceResult,true,'Modelo facial deve processar offline.');
+  await page.screenshot({path:'ui-preview.png',fullPage:true});
   const result = await page.evaluate(async () => {
    const detector = new Hands({locateFile:f=>'/mediapipe/'+f});
    detector.setOptions({maxNumHands:1,modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.6});
@@ -55,8 +70,8 @@ const { chromium } = require('playwright');
   assert.equal(result,true,'O detector deve processar uma imagem sem rede externa.');
   assert.deepEqual(external,[],'Nenhum recurso externo pode ser solicitado.');
   const manifest=fs.readFileSync('app/src/main/AndroidManifest.xml','utf8');
-  assert(!manifest.includes('android.permission.INTERNET'));
-  console.log('PASSOU: detector inicializado e imagem processada sem rede externa; app sem permissão INTERNET.');
+  assert(manifest.includes('android.permission.INTERNET'),'Internet é necessária somente para o navegador.');
+  console.log('PASSOU: detector inicializado e imagem processada sem rede externa; modelos locais; rede externa bloqueada durante o teste.');
  } finally {
   if(browser)await browser.close();
   await new Promise(resolve=>server.close(resolve));
