@@ -27,3 +27,12 @@ JDK 17, Gradle 8.9, Android SDK 35. `gradle assembleDebug`. O workflow baixa pac
 - [Meta: componentes de UI](https://developers.meta.com/vr/design/components/): referência, não recursos oficiais incorporados.
 
 Os resultados de CI estão nos artifacts da execução. Nenhum teste em celular/VR Box físico foi executado neste ambiente.
+
+
+## Atualização: Realidade Mista VR Box (vídeo de referência, 2026-11-02)
+
+- Botão **Realidade mista** abre a câmera traseira, mostra o mundo real como fundo e desenha objetos 3D estereoscópicos; usa as mesmas mãos MediaPipe locais para pinça e arrasto. O botão **Entrar VR** divide a tela para as duas lentes.
+- **Ajustes → Alinhamento dos olhos** desloca a imagem por lente para diminuir desconfortos de alinhamento; IPD, FOV e distorção continuam ajustáveis. Teste primeiro sem óculos, depois faça a calibração dentro do VR Box, sentado.
+- A câmera é **monocular**: o vídeo é o mesmo nos dois olhos, não fornece percepção estereoscópica da distância nem rastreamento espacial de profundidade. Os objetos podem deslizar porque o rastreamento sem giroscópio usa fluxo óptico relativo, não SLAM/6DoF. Não use a imagem como substituto de visão desobstruída para caminhar ou evitar obstáculos.
+- Sem câmera ou permissão, a cena 3D e os controles de toque continuam disponíveis. Interromper a câmera/suspender o app fecha o modo MR.
+- O APK sai de **GitHub Actions → APK da câmera da mão** e de **Releases** quando a compilação termina com sucesso. O código não representa o software do Quest e ainda precisa de teste em aparelho real.

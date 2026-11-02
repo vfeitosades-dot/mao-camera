@@ -6,7 +6,7 @@ class HandPipeline{
   await this.pending.catch(()=>{});if(token!==this.epoch)return;
   if(!this.model){this.model=new Hands({locateFile:f=>'/mediapipe/'+f});this.model.onResults(r=>{if(this.running){const now=performance.now();this.inferenceMs=now-this.sent;this.onResults(r);}});}
   await this.model.setOptions({maxNumHands,modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.6});if(token!==this.epoch)return;
-  const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{exact:'environment'},width:{ideal:480,max:640},height:{ideal:360,max:480},frameRate:{ideal:24,max:24}}});
+  let acquired;const constraints={audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:480,max:640},height:{ideal:360,max:480},frameRate:{ideal:24,max:24}}};try{acquired=await navigator.mediaDevices.getUserMedia({...constraints,video:{...constraints.video,facingMode:{exact:'environment'}}});}catch(e){if(e.name!=='OverconstrainedError'&&e.name!=='NotFoundError')throw e;acquired=await navigator.mediaDevices.getUserMedia(constraints);}
   if(token!==this.epoch||document.hidden){acquired.getTracks().forEach(t=>t.stop());return;}
   this.stream=acquired;this.video.srcObject=acquired;await this.video.play();if(token!==this.epoch)return;
   this.running=true;this.lastVideoTime=-1;this.lastInference=-Infinity;this.onStatus('Câmera ativa · processamento local');this.schedule(token);

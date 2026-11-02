@@ -3,3 +3,7 @@
 body.vr header{opacity:1;background:none;border:0;box-shadow:none;backdrop-filter:none;pointer-events:none}body.vr header>*:not(#vr){display:none}body.vr footer{display:none}
 
 header{background:linear-gradient(135deg,#182839eb,#14202ee8);border-color:#ffffff1e;box-shadow:0 15px 50px #0004}button{background:linear-gradient(180deg,#34465a,#243344);box-shadow:inset 0 1px #ffffff15;color:#edf6ff}button:hover{border-color:#7cc9ff}strong{letter-spacing:2.3px}header small{color:#a6c5e0}footer{background:#111e2de8}#sidebar,#toolbox{background:linear-gradient(145deg,#213246f5,#111d2bf5);border-color:#51687d}#reticle{border:1px solid #a9dbff88;background:#a9dbff1a;border-radius:50%;width:24px;height:24px;font-size:0}body.vr #vr{background:#112034bb;border:1px solid #a9dbff44}
+
+/* A imagem da câmera compõe o mundo quando o modo MR está ligado. */
+body.mixed #camera{display:none}
+body.mixed:not(.vr) #world{background:#020607}
