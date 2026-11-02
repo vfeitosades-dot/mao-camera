@@ -1,0 +1,73 @@
+name: Hand Tracking VR 13 - APK
+on:
+  push:
+    paths:
+      - 'hand-tracking-v13/**'
+      - '.github/workflows/hand-tracking-v13-apk.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: hand-tracking-v13
+  cancel-in-progress: false
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Incluir MediaPipe e modelo de mãos para uso offline
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BASE=hand-tracking-v13/app/src/main/assets/mediapipe
+          mkdir -p "$BASE/tasks" "$BASE/hands" "$BASE/model"
+          curl --fail --location --retry 3 https://registry.npmjs.org/@mediapipe/tasks-vision/-/tasks-vision-0.10.21.tgz -o "$RUNNER_TEMP/tasks.tgz"
+          tar -xzf "$RUNNER_TEMP/tasks.tgz" --strip-components=1 -C "$BASE/tasks" package/vision_bundle.mjs package/wasm
+          curl --fail --location --retry 3 https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task -o "$BASE/model/hand_landmarker.task"
+          curl --fail --location --retry 3 https://registry.npmjs.org/@mediapipe/hands/-/hands-0.4.1675469240.tgz -o "$RUNNER_TEMP/hands.tgz"
+          tar -xzf "$RUNNER_TEMP/hands.tgz" --strip-components=1 -C "$BASE/hands"
+          test -s "$BASE/tasks/vision_bundle.mjs"
+          test -s "$BASE/tasks/wasm/vision_wasm_internal.wasm"
+          test -s "$BASE/model/hand_landmarker.task"
+          test -s "$BASE/hands/hands.js"
+      - name: Validar código JavaScript
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('hand-tracking-v13/app/src/main/assets/index.html').read_text()
+          Path('/tmp/hand-v13.js').write_text(s.split('<script>',1)[1].split('</script>',1)[0])
+          PY
+          node --check /tmp/hand-v13.js
+      - name: Compilar APK Android
+        run: gradle -p hand-tracking-v13 :app:assembleDebug --no-daemon
+      - name: Verificar assinatura e pacote
+        shell: bash
+        run: |
+          set -eux
+          APK=hand-tracking-v13/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -12
+          cp "$APK" HandTrackingVR-13.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HandTrackingVR-13-apk
+          path: HandTrackingVR-13.apk
+      - name: Publicar APK no GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="hand-tracking-v13-${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" HandTrackingVR-13.apk --target "$GITHUB_SHA" --title "Hand Tracking VR 13 - APK" --notes "APK debug para Android 8+, criado a partir de Hand Tracking VR (13).html. MediaPipe e modelos incluídos localmente. Não validado em VR Box físico."
